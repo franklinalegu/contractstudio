@@ -331,17 +331,18 @@ function vClients() {
   /* explicit records first, so clients with no paperwork yet still list */
   S.clients.forEach((r) => {
     const k = r.id || key(r.name);
-    map[k] = { id: r.id || "", name: r.name || "", business: r.business || "", n: 0, billed: 0, owed: 0, cur: "", multi: false };
+    map[k] = { id: r.id || "", name: r.name || "", business: r.business || "", n: 0, inv: 0, billed: 0, owed: 0, cur: "", multi: false };
   });
   S.contracts.forEach((c) => {
     const k = c.client.id || key(c.client.name);
-    const r = (map[k] = map[k] || { id: c.client.id || "", name: c.client.name || "", business: "", n: 0, billed: 0, owed: 0, cur: "", multi: false });
+    const r = (map[k] = map[k] || { id: c.client.id || "", name: c.client.name || "", business: "", n: 0, inv: 0, billed: 0, owed: 0, cur: "", multi: false });
     r.n++; if (!r.business && c.client.business) r.business = c.client.business;
   });
   S.invoices.forEach((i) => {
     const c = i.contractId ? S.contracts.find((x) => x.id === i.contractId) : null;
     const k = (c && c.client.id) || (c && key(c.client.name)) || i.clientId || key(i.clientName);
-    const r = (map[k] = map[k] || { id: i.clientId || "", name: i.clientName || "", business: (c && c.client.business) || "", n: 0, billed: 0, owed: 0, cur: "", multi: false });
+    const r = (map[k] = map[k] || { id: i.clientId || "", name: i.clientName || "", business: (c && c.client.business) || "", n: 0, inv: 0, billed: 0, owed: 0, cur: "", multi: false });
+    r.inv++;
     if (!r.cur) r.cur = i.currency; else if (r.cur !== i.currency) r.multi = true;
     r.billed += invTotal(i);
     if (i.status !== "PAID") r.owed += invTotal(i);
@@ -351,10 +352,10 @@ function vClients() {
   return `<p class="eyebrow">Admin</p><h1 class="page-title">All <span class="hl">clients</span></h1>
     <div class="toolbar"><span class="spacer"></span><button class="btn btn-primary" data-act="new-client">+ New client</button></div>
     ${rows.length ? `<div class="card" style="padding:0;overflow:auto"><table class="list">
-      <tr><th>Client ID</th><th>Name</th><th>Contracts</th><th>Billed</th><th>Owed</th><th></th></tr>
+      <tr><th>Client ID</th><th>Name</th><th>Contracts</th><th>Invoices</th><th>Billed</th><th>Owed</th><th></th></tr>
       ${rows.map((r) => `<tr><td><strong>${esc(r.id) || "—"}</strong></td><td>${esc(r.name)}${r.business ? `<br><span style="color:var(--stone);font-size:.8rem">${esc(r.business)}</span>` : ""}</td>
-        <td>${r.n}</td><td class="money">${fmt(r, r.billed)}</td><td class="money">${fmt(r, r.owed)}</td>
-        <td><div class="rowactions"><button data-act="edit-client" data-id="${esc(r.id || "n:" + r.name)}">Edit</button></div></td></tr>`).join("")}
+        <td>${r.n}</td><td>${r.inv}</td><td class="money">${fmt(r, r.billed)}</td><td class="money">${fmt(r, r.owed)}</td>
+        <td><div class="rowactions"><button data-act="edit-client" data-id="${esc(r.id || "n:" + r.name)}">Edit</button><button data-act="del-client" data-id="${esc(r.id || "n:" + r.name)}" style="color:var(--error)">Delete</button></div></td></tr>`).join("")}
     </table></div><p style="font-size:.8rem;color:var(--stone)">${rows.some((r) => r.multi) ? "* Mixed currencies summed by figure." : ""}</p>` : `<div class="card empty">No clients yet — they appear here once you save a contract, or <button class="btn btn-primary" data-act="new-client">add one</button>.</div>`}`;
 }
 
@@ -817,6 +818,18 @@ document.addEventListener("click", async (e) => {
     route = { view: "client-edit", id: null }; render();
   }
   else if (act === "cancel-client") { draftClient = null; route = { view: "clients", id: null }; render(); }
+  else if (act === "del-client") {
+    const r = S.clients.find((x) => x.id === id) || S.clients.find((x) => ("n:" + String(x.name || "").trim().toLowerCase()) === id);
+    if (!r) return;
+    const ck = r.id || ("n:" + String(r.name || "").trim().toLowerCase());
+    const nc = S.contracts.filter((c) => (c.client.id || ("n:" + String(c.client.name || "").trim().toLowerCase())) === ck).length;
+    const ni = S.invoices.filter((i) => {
+      const c = i.contractId ? S.contracts.find((x) => x.id === i.contractId) : null;
+      return ((c && c.client.id) || (c && ("n:" + String(c.client.name || "").trim().toLowerCase())) || i.clientId || ("n:" + String(i.clientName || "").trim().toLowerCase())) === ck;
+    }).length;
+    if (nc || ni) { alert(`Cannot delete — this client has ${nc} contract(s) and ${ni} invoice(s). Delete those first.`); return; }
+    if (confirm(`Delete client "${r.name}"?`)) { S.clients = S.clients.filter((x) => x !== r); store.save(); render(); toast("Client deleted."); }
+  }
   else if (act === "save-client") {
     const d = draftClient;
     if (!d.name.trim()) { const er = $("#err"); if (er) er.innerHTML = `<div class="alert">Client name is required.</div>`; return; }
