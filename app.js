@@ -43,13 +43,26 @@ function blankContract() {
 }
 
 const store = {
-  data: { contracts: [], invoices: [], templates: [], settings: { designer: "MrJamesBrand Ltd", email: "hello@mrjamesbrandltd.com", social: "@mrjamesbrand", wm1: "Western Union cash pickup", wm2: "World Remit transfer" } },
+  data: { contracts: [], invoices: [], templates: [], clientSeq: 1, settings: { designer: "MrJamesBrand Ltd", email: "hello@mrjamesbrandltd.com", social: "@mrjamesbrand", wm1: "Western Union cash pickup", wm2: "World Remit transfer", adminUser: "mrjamesbrandltd", lockHash: "s256:7b81f654e58ca14746e750df6a268d1f5a8fee8524e1bffdef7ddf12f71a3c95" } },
   load() {
     try { const d = JSON.parse(localStorage.getItem(KEY)); if (d && d.contracts) this.data = Object.assign(this.data, d); } catch (e) {}
+    this.data.settings = Object.assign({ adminUser: "mrjamesbrandltd", lockHash: "" }, this.data.settings);
     if (!Array.isArray(this.data.templates)) this.data.templates = [];
     let seeded = false;
     for (const s of defaultTemplates()) if (!this.data.templates.some((t) => t.id === s.id)) { this.data.templates.push(s); seeded = true; }
-    if (seeded) this.save();
+    let fixed = seeded;
+    for (const c of this.data.contracts) if (c.client && c.client.name && !c.client.id) { c.client.id = this.clientIdFor(c.client.name); fixed = true; }
+    if (fixed) this.save();
+  },
+  /* Stable per-client ID: same name always yields the same ID. */
+  clientIdFor(name) {
+    const key = String(name || "").trim().toLowerCase();
+    if (!key) return "";
+    const hit = this.data.contracts.find((c) => c.client && c.client.id && String(c.client.name || "").trim().toLowerCase() === key);
+    if (hit) return hit.client.id;
+    const id = "CLT-MJB-" + String(this.data.clientSeq || 1).padStart(4, "0");
+    this.data.clientSeq = (this.data.clientSeq || 1) + 1;
+    return id;
   },
   save() { localStorage.setItem(KEY, JSON.stringify(this.data)); }
 };
@@ -407,7 +420,17 @@ function vSettings() {
       <p style="font-size:.85rem;color:var(--stone)">All contracts, invoices and settings live in this browser. Download a backup copy regularly.</p>
       <p class="mt"><button class="btn btn-ghost" data-act="backup">Download backup</button>
       <button class="btn btn-ghost" data-act="restore">Restore backup</button>
-      <input type="file" id="restore-file" accept="application/json" style="display:none"></p></div>`;
+      <input type="file" id="restore-file" accept="application/json" style="display:none"></p></div>
+    <div class="card no-print mt" style="max-width:640px"><h3>Admin login ${S.settings.lockHash ? "(on)" : "(off)"}</h3>
+      <p style="font-size:.85rem;color:var(--stone)">Password-gate this studio on shared devices. Stored as a hash, never plain text.</p>
+      <div class="formgrid mt">
+        <label class="f">Username<input id="set-adminuser" value="${esc(S.settings.adminUser || "")}" autocomplete="username"></label>
+        <span></span>
+        <label class="f">New password<input id="set-pass" type="password" autocomplete="new-password"></label>
+        <label class="f">Confirm<input id="set-pass2" type="password" autocomplete="new-password"></label>
+      </div>
+      <p class="mt"><button class="btn btn-primary" data-act="save-lock">Set password</button>
+      ${S.settings.lockHash ? `<button class="btn btn-danger" data-act="remove-lock">Remove lock</button>` : ""}</p></div>`;
 }
 
 /* ---------- signature pads ---------- */
@@ -425,8 +448,15 @@ function pad(id) {
 let padD = null, padC = null;
 
 /* ---------- render + events ---------- */
+const isLocked = () => !!S.settings.lockHash && sessionStorage.getItem("mjb-unlocked") !== "1";
 function render() {
   const app = $("#app");
+  const side = document.querySelector(".sidebar");
+  if (isLocked()) {
+    if (side) side.style.display = "none";
+    app.innerHTML = vLock(); window.scrollTo(0, 0); return;
+  }
+  if (side) side.style.display = "";
   if (route.view === "dashboard") app.innerHTML = vDashboard();
   else if (route.view === "contracts") app.innerHTML = vContracts();
   else if (route.view === "picker") app.innerHTML = vPicker();
@@ -457,7 +487,8 @@ document.addEventListener("input", (e) => {
   }
 });
 
-document.addEventListener("click", (e) => {
+document.addEventListener("click", async (e) => {
+  if (e.target.closest("[data-act='lock']")) { sessionStorage.removeItem("mjb-unlocked"); route = { view: "dashboard", id: null }; render(); return; }
   const nav = e.target.closest(".navlink"); if (nav) { route = { view: nav.dataset.view, id: null }; render(); return; }
   const b = e.target.closest("[data-act]"); if (!b) return;
   const act = b.dataset.act, id = b.dataset.id;
@@ -536,6 +567,7 @@ document.addEventListener("click", (e) => {
   else if (act === "save-settings") {
     S.settings.designer = $("#set-designer").value; S.settings.email = $("#set-email").value;
     S.settings.social = $("#set-social").value; S.settings.wm1 = $("#set-wm1").value; S.settings.wm2 = $("#set-wm2").value;
+    if ($("#set-adminuser")) S.settings.adminUser = $("#set-adminuser").value.trim() || "mrjamesbrandltd";
     store.save(); alert("Settings saved."); route = { view: "dashboard", id: null }; render();
   }
   else if (act === "backup") { download(`contract-studio-backup-${todayISO()}.json`, JSON.stringify(store.data, null, 2)); toast("Backup downloaded."); }
@@ -543,6 +575,17 @@ document.addEventListener("click", (e) => {
   else if (act === "del-tpl") {
     const t = S.templates.find((x) => x.id === id);
     if (t && confirm(`Delete template "${t.name}"?`)) { S.templates = S.templates.filter((x) => x.id !== id); store.save(); render(); }
+  }
+  else if (act === "save-lock") {
+    const a = $("#set-pass").value, b2 = $("#set-pass2").value;
+    if (!a || a.length < 4) { alert("Password needs at least 4 characters."); return; }
+    if (a !== b2) { alert("Passwords do not match."); return; }
+    S.settings.lockHash = await sha(a); store.save();
+    $("#set-pass").value = ""; $("#set-pass2").value = "";
+    toast("Admin lock is on."); render();
+  }
+  else if (act === "remove-lock") {
+    if (confirm("Remove the admin lock?")) { S.settings.lockHash = ""; store.save(); render(); }
   }
 });
 
@@ -569,6 +612,29 @@ function syncForm() {
   if (tf) tf.value = money(totals(draft).total, draft.money.currency);
 }
 function toast(m) { let t = $("#toast"); if (!t) { t = document.createElement("div"); t.id = "toast"; document.body.appendChild(t); } t.textContent = m; t.className = "show"; clearTimeout(t._h); t._h = setTimeout(() => (t.className = ""), 2200); }
+function vLock() {
+  return `<div style="min-height:80vh;display:flex;align-items:center;justify-content:center">
+    <form id="lockform" class="card" style="width:100%;max-width:380px">
+      <p class="eyebrow">Restricted</p><h1 class="page-title">Admin <span class="hl">login</span></h1>
+      <div id="lockerr"></div>
+      <label class="f mt">Username<input id="lockuser" autocomplete="username" value="mrjamesbrandltd"></label>
+      <label class="f mt">Password<input id="lockpass" type="password" autocomplete="current-password"></label>
+      <p class="mt"><button class="btn btn-primary" type="submit" style="width:100%">Unlock</button></p>
+    </form></div>`;
+}
+async function sha(s) {
+  try {
+    const b = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("mjb:" + s));
+    return "s256:" + Array.from(new Uint8Array(b)).map((x) => x.toString(16).padStart(2, "0")).join("");
+  } catch (e) { let h = 5381; const str = "mjb:" + s; for (let i = 0; i < str.length; i++) h = (((h << 5) + h + str.charCodeAt(i)) | 0); return "dj2:" + (h >>> 0).toString(16); }
+}
+async function tryUnlock() {
+  const u = $("#lockuser").value.trim().toLowerCase(), v = $("#lockpass").value;
+  if (u === String(S.settings.adminUser || "").toLowerCase() && (await sha(v)) === S.settings.lockHash) {
+    sessionStorage.setItem("mjb-unlocked", "1"); render(); toast("Welcome back.");
+  } else { const er = $("#lockerr"); if (er) er.innerHTML = `<div class="alert">Wrong username or password.</div>`; }
+}
+document.addEventListener("submit", (e) => { if (e.target.id === "lockform") { e.preventDefault(); tryUnlock(); } });
 document.addEventListener("focusout", (e) => {
   if (route.view !== "editor" || !draft) return;
   const el = e.target.closest ? e.target.closest("[data-ep],[data-epn],[data-epw]") : null;

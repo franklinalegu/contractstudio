@@ -19,3 +19,11 @@ Double-click **`start-server.bat`**, then open http://127.0.0.1:8080
 - **Print / PDF** — browser print, document-only stylesheet
 
 Data lives in browser localStorage. Download a backup regularly.
+
+## Deploy (GitHub Pages + subdomain)
+
+Push `main` — the `pages.yml` workflow publishes this folder automatically.
+
+1. Repo → Settings → Pages → Source: **GitHub Actions**.
+2. Subdomain: DNS `CNAME contracts → <user>.github.io`, then Pages → Custom domain: `contracts.mrjamesbrandltd.com` (HTTPS auto-enforced).
+3. Open the live URL once and set the **Admin login** password in Settings.
