@@ -225,7 +225,7 @@ function invoiceHTML(inv) {
   const hasVat = inv.subtotal !== undefined;
   const vSub = hasVat ? inv.subtotal : sum, vVat = hasVat ? inv.vat : 0;
   return `<div class="doc"><div class="doc-page">
-    <div class="inv-head"><div class="inv-brand"><span class="inv-mark">MJB</span>
+    <div class="inv-head"><div class="inv-brand">${S.settings.logo ? `<img class="inv-logo" src="${S.settings.logo}" alt="studio logo">` : `<span class="inv-mark">MJB</span>`}
       <span><strong>MRJAMESBRAND LTD</strong><br>${esc(S.settings.email)}</span></div>
       <div style="text-align:right"><h2 style="font-size:2.2rem">INVOICE</h2><p>${esc(inv.ref)} · ${esc(inv.createdAt)}</p>
       <span class="badge b-${inv.status.toLowerCase()}">${inv.status}</span></div></div>
@@ -448,12 +448,12 @@ function vInvEditor() {
       </div>
       <h3 class="mt">Services <span style="font-weight:400;font-size:.8rem;color:var(--stone)">name, description and cost per line</span></h3>
       <div id="iilist">
-        ${d.items.map((it, i) => `<div class="deliverable-row" style="display:grid;grid-template-columns:2fr 3fr 1fr 1.5fr auto;align-items:start">
+        ${d.items.map((it, i) => `<div class="ii-row">
           <input data-ii="${i}:name" value="${esc(it.name)}" placeholder="Service">
           <input data-ii="${i}:desc" value="${esc(it.desc)}" placeholder="Description">
-          <input type="number" min="1" data-ii="${i}:qty" value="${it.qty}">
-          <input type="number" min="0" data-ii="${i}:price" value="${it.price}">
-          <button data-act="del-ii" data-i="${i}">×</button></div>`).join("")}
+          <input type="number" min="1" data-ii="${i}:qty" value="${it.qty}" aria-label="Quantity">
+          <input type="number" min="0" data-ii="${i}:price" value="${it.price}" aria-label="Price">
+          <button data-act="del-ii" data-i="${i}" aria-label="Remove line">×</button></div>`).join("")}
       </div>
       <p class="mt"><button class="btn btn-ghost" data-act="add-ii">+ Add line</button></p>
       <div class="mt" id="invtotals" style="max-width:320px;margin-left:auto">${invTotalsHTML(d)}</div>
@@ -490,6 +490,12 @@ function vSettings() {
       ${S.templates.map((t) => `<p style="display:flex;justify-content:space-between;align-items:center;gap:12px;border-bottom:1px solid var(--mist);padding:8px 0">
         <span><strong>${esc(t.name)}</strong> <span style="color:var(--stone);font-size:.8rem">${t.depositPct}% deposit · ${t.deliverables.length} deliverables</span></span>
         <button class="btn btn-ghost" data-act="del-tpl" data-id="${t.id}">Delete</button></p>`).join("")}</div>
+    <div class="card no-print mt" style="max-width:640px"><h3>Studio logo</h3>
+      <p style="font-size:.85rem;color:var(--stone)">Shows on invoices (contracts stay logo-free). PNG or JPG, resized automatically.</p>
+      <p class="mt">${S.settings.logo ? `<img src="${S.settings.logo}" alt="studio logo" style="max-height:72px;max-width:220px;background:#fff;border:1px solid var(--mist);padding:6px">` : `<span style="font-size:.85rem;color:var(--stone)">No logo yet — initials print instead.</span>`}</p>
+      <p class="mt"><button class="btn btn-ghost" data-act="logo-pick">Upload logo</button>
+      ${S.settings.logo ? `<button class="btn btn-danger" data-act="logo-clear">Remove</button>` : ""}
+      <input type="file" id="logo-file" accept="image/png,image/jpeg" style="display:none"></p></div>
     <div class="card no-print mt" style="max-width:640px"><h3>Official Accounts (locked)</h3>
       <p style="font-size:.85rem;color:var(--stone)">Printed on every invoice, identical each time. Matches the mrjamesbrand repo.</p>
       <table class="list mt"><tr><th>Bank</th><th>Name</th><th>Number</th></tr>
@@ -674,6 +680,10 @@ document.addEventListener("click", async (e) => {
   }
   else if (act === "backup") { download(`contract-studio-backup-${todayISO()}.json`, JSON.stringify(store.data, null, 2)); toast("Backup downloaded."); }
   else if (act === "restore") { const f = $("#restore-file"); if (f) f.click(); }
+  else if (act === "logo-pick") { const f = $("#logo-file"); if (f) f.click(); }
+  else if (act === "logo-clear") {
+    if (confirm("Remove the studio logo? Invoices will show initials instead.")) { S.settings.logo = ""; store.save(); render(); }
+  }
   else if (act === "del-tpl") {
     const t = S.templates.find((x) => x.id === id);
     if (t && confirm(`Delete template "${t.name}"?`)) { S.templates = S.templates.filter((x) => x.id !== id); store.save(); render(); }
@@ -743,6 +753,26 @@ document.addEventListener("focusout", (e) => {
   if (el && $("#preview") && $("#preview").contains(el)) { refreshPreviewEd(); syncForm(); }
 });
 document.addEventListener("change", (e) => {
+  if (e.target.id === "logo-file") {
+    const f = e.target.files[0]; e.target.value = ""; if (!f) return;
+    if (f.size > 5 * 1024 * 1024) { alert("Logo must be under 5MB."); return; }
+    const rd = new FileReader();
+    rd.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const maxW = 440, sc = Math.min(1, maxW / img.width);
+        const cv = document.createElement("canvas");
+        cv.width = Math.round(img.width * sc); cv.height = Math.round(img.height * sc);
+        cv.getContext("2d").drawImage(img, 0, 0, cv.width, cv.height);
+        S.settings.logo = cv.toDataURL("image/png");
+        store.save(); toast("Logo saved."); render();
+      };
+      img.onerror = () => alert("Could not read that image.");
+      img.src = rd.result;
+    };
+    rd.readAsDataURL(f);
+    return;
+  }
   if (e.target.id === "restore-file") {
     const f = e.target.files[0]; if (!f) return;
     const r = new FileReader();
