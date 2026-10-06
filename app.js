@@ -43,21 +43,42 @@ function blankContract() {
 }
 
 const store = {
-  data: { contracts: [], invoices: [], templates: [], clientSeq: 1, settings: { designer: "MrJamesBrand Ltd", email: "hello@mrjamesbrandltd.com", social: "@mrjamesbrand", wm1: "Western Union cash pickup", wm2: "World Remit transfer", adminUser: "mrjamesbrandltd", lockHash: "s256:7b81f654e58ca14746e750df6a268d1f5a8fee8524e1bffdef7ddf12f71a3c95" } },
+  data: { contracts: [], invoices: [], templates: [], clients: [], clientSeq: 1, settings: { designer: "MrJamesBrand Ltd", email: "hello@mrjamesbrandltd.com", social: "@mrjamesbrand", wm1: "Western Union cash pickup", wm2: "World Remit transfer", adminUser: "mrjamesbrandltd", lockHash: "s256:7b81f654e58ca14746e750df6a268d1f5a8fee8524e1bffdef7ddf12f71a3c95" } },
   load() {
     try { const d = JSON.parse(localStorage.getItem(KEY)); if (d && d.contracts) this.data = Object.assign(this.data, d); } catch (e) {}
     this.data.settings = Object.assign({ adminUser: "mrjamesbrandltd", lockHash: "" }, this.data.settings);
     if (!Array.isArray(this.data.templates)) this.data.templates = [];
     let seeded = false;
     for (const s of defaultTemplates()) if (!this.data.templates.some((t) => t.id === s.id)) { this.data.templates.push(s); seeded = true; }
-    let fixed = seeded;
-    for (const c of this.data.contracts) if (c.client && c.client.name && !c.client.id) { c.client.id = this.clientIdFor(c.client.name); fixed = true; }
-    if (fixed) this.save();
+    if (!Array.isArray(this.data.clients)) this.data.clients = [];
+    /* explicit client records, backfilled from existing paperwork */
+    let touched = seeded;
+    const seen = {};
+    this.data.clients.forEach((r) => { seen[(r.id || ("n:" + String(r.name || "").trim().toLowerCase()))] = r; });
+    const ensureRec = (id, name, business, email, phone) => {
+      const nm = String(name || "").trim(); if (!nm && !id) return null;
+      const k = id || ("n:" + nm.toLowerCase());
+      let r = seen[k];
+      if (!r) { r = { id: id || "", name: nm, business: business || "", email: email || "", phone: phone || "" }; this.data.clients.push(r); seen[k] = r; touched = true; }
+      else { if (business && !r.business) { r.business = business; touched = true; } if (email && !r.email) { r.email = email; touched = true; } if (phone && !r.phone) { r.phone = phone; touched = true; } if (id && !r.id) { r.id = id; touched = true; } }
+      return r;
+    };
+    for (const c of this.data.contracts) {
+      if (c.client && c.client.name && !c.client.id) { c.client.id = this.clientIdFor(c.client.name); touched = true; }
+      if (c.client && (c.client.id || c.client.name)) ensureRec(c.client.id, c.client.name, c.client.business, c.client.email, c.client.phone);
+    }
+    for (const i of this.data.invoices) if (i.clientId || i.clientName) ensureRec(i.clientId, i.clientName, "", i.clientEmail, "");
+    let maxSeq = this.data.clientSeq || 1;
+    this.data.clients.forEach((r) => { const m = String(r.id || "").match(/(\d+)\s*$/); if (m) maxSeq = Math.max(maxSeq, Number(m[1]) + 1); });
+    if (maxSeq !== this.data.clientSeq) { this.data.clientSeq = maxSeq; touched = true; }
+    if (touched) this.save();
   },
   /* Stable per-client ID: same name always yields the same ID. */
   clientIdFor(name) {
     const key = String(name || "").trim().toLowerCase();
     if (!key) return "";
+    const rec = (this.data.clients || []).find((r) => String(r.name || "").trim().toLowerCase() === key && r.id);
+    if (rec) return rec.id;
     const hit = this.data.contracts.find((c) => c.client && c.client.id && String(c.client.name || "").trim().toLowerCase() === key);
     if (hit) return hit.client.id;
     const id = "CLT-MJB-" + String(this.data.clientSeq || 1).padStart(4, "0");
@@ -234,8 +255,8 @@ function invoiceHTML(inv) {
     <table class="doc-table mt"><tr><th>Item</th><th>Qty</th><th>Price</th><th>Amount</th></tr>
       ${inv.items.map((i) => `<tr><td><strong>${esc(i.name)}</strong><br>${esc(i.desc || "")}</td><td>${i.qty}</td><td>${money(i.price, inv.currency)}</td><td>${money(i.qty * i.price, inv.currency)}</td></tr>`).join("")}
     </table>
-    ${hasVat ? `<p style="text-align:right">Subtotal: ${money(vSub, inv.currency)}<br>VAT (${inv.vatPct}%): ${money(vVat, inv.currency)}</p>` : ""}
-    <div class="inv-total"><span>TOTAL</span><span>${money(vSub + vVat, inv.currency)}</span></div>
+    ${hasVat ? `<p style="text-align:right">Subtotal: ${money(vSub, inv.currency)}<br>${inv.disc > 0 ? `Discount (${inv.discPct}%): −${money(inv.disc, inv.currency)}<br>` : ""}VAT (${inv.vatPct}%): ${money(vVat, inv.currency)}</p>` : ""}
+    <div class="inv-total"><span>TOTAL</span><span>${money(invTotal(inv), inv.currency)}</span></div>
     ${inv.notes ? `<p class="mt"><strong>Notes:</strong> ${esc(inv.notes)}</p>` : ""}
     <div class="doc-beige"><h4>Pay To: Official Studio Accounts</h4>
       <table class="doc-table"><tr><th>Bank</th><th>Account Name</th><th>Account Number</th></tr>
@@ -307,6 +328,11 @@ function vContracts() {
 function vClients() {
   const map = {};
   const key = (name) => "n:" + String(name || "").trim().toLowerCase();
+  /* explicit records first, so clients with no paperwork yet still list */
+  S.clients.forEach((r) => {
+    const k = r.id || key(r.name);
+    map[k] = { id: r.id || "", name: r.name || "", business: r.business || "", n: 0, billed: 0, owed: 0, cur: "", multi: false };
+  });
   S.contracts.forEach((c) => {
     const k = c.client.id || key(c.client.name);
     const r = (map[k] = map[k] || { id: c.client.id || "", name: c.client.name || "", business: "", n: 0, billed: 0, owed: 0, cur: "", multi: false });
@@ -323,11 +349,32 @@ function vClients() {
   const rows = Object.values(map).sort((a, b) => b.billed - a.billed);
   const fmt = (r, v) => r.multi ? `${money(v, r.cur || "USD")}*` : money(v, r.cur || "USD");
   return `<p class="eyebrow">Admin</p><h1 class="page-title">All <span class="hl">clients</span></h1>
+    <div class="toolbar"><span class="spacer"></span><button class="btn btn-primary" data-act="new-client">+ New client</button></div>
     ${rows.length ? `<div class="card" style="padding:0;overflow:auto"><table class="list">
-      <tr><th>Client ID</th><th>Name</th><th>Contracts</th><th>Billed</th><th>Owed</th></tr>
+      <tr><th>Client ID</th><th>Name</th><th>Contracts</th><th>Billed</th><th>Owed</th><th></th></tr>
       ${rows.map((r) => `<tr><td><strong>${esc(r.id) || "—"}</strong></td><td>${esc(r.name)}${r.business ? `<br><span style="color:var(--stone);font-size:.8rem">${esc(r.business)}</span>` : ""}</td>
-        <td>${r.n}</td><td class="money">${fmt(r, r.billed)}</td><td class="money">${fmt(r, r.owed)}</td></tr>`).join("")}
-    </table></div><p style="font-size:.8rem;color:var(--stone)">${rows.some((r) => r.multi) ? "* Mixed currencies summed by figure." : ""}</p>` : `<div class="card empty">No clients yet — they appear here once you save a contract.</div>`}`;
+        <td>${r.n}</td><td class="money">${fmt(r, r.billed)}</td><td class="money">${fmt(r, r.owed)}</td>
+        <td><div class="rowactions"><button data-act="edit-client" data-id="${esc(r.id || "n:" + r.name)}">Edit</button></div></td></tr>`).join("")}
+    </table></div><p style="font-size:.8rem;color:var(--stone)">${rows.some((r) => r.multi) ? "* Mixed currencies summed by figure." : ""}</p>` : `<div class="card empty">No clients yet — they appear here once you save a contract, or <button class="btn btn-primary" data-act="new-client">add one</button>.</div>`}`;
+}
+
+let draftClient = null;
+function vClientEdit() {
+  const d = draftClient;
+  return `<p class="eyebrow">Admin · client ${esc(d.id) || "(new)"}</p>
+    <h1 class="page-title">${d._isNew ? "New" : "Edit"} <span class="hl">client</span></h1>
+    <div class="toolbar no-print">
+      <button class="btn btn-primary" data-act="save-client">Save client</button>
+      <button class="btn btn-ghost" data-act="cancel-client">Cancel</button>
+    </div><div id="err"></div>
+    <div class="card no-print" style="max-width:640px"><div class="formgrid">
+      <label class="f">Full name*<input data-cf="name" value="${esc(d.name)}"></label>
+      <label class="f">Business<input data-cf="business" value="${esc(d.business)}"></label>
+      <label class="f">Email<input data-cf="email" value="${esc(d.email)}"></label>
+      <label class="f">Phone<input data-cf="phone" value="${esc(d.phone)}"></label>
+      ${d.id ? `<label class="f">Client ID<input value="${esc(d.id)}" disabled></label>` : ""}
+    </div>
+    <p class="mt" style="font-size:.85rem;color:var(--stone)">Saving updates this client everywhere: their record plus all matching contracts and invoices.</p></div>`;
 }
 
 function vPicker() {  return `<p class="eyebrow">New contract</p><h1 class="page-title">Pick a <span class="hl">service</span></h1>
@@ -456,23 +503,27 @@ function vInvoice(id) {
 /* ---------- standalone invoice builder ---------- */
 let draftInv = null;
 function blankInv() {
-  return { clientName: "", clientEmail: "", currency: "USD", vatPct: 7.5,
+  return { clientName: "", clientEmail: "", currency: "USD", vatPct: 7.5, discPct: 0,
     dueAt: new Date(Date.now() + 14 * 864e5).toISOString().slice(0, 10),
     notes: "", contractId: "", items: [{ name: "", desc: "", qty: 1, price: 0 }] };
 }
 function invTotals(d) {
   const sub = d.items.reduce((s, i) => s + (Number(i.qty) || 0) * (Number(i.price) || 0), 0);
-  const pct = Number(d.vatPct) || 0, vat = Math.round(sub * pct / 100);
-  return { sub, pct, vat, total: sub + vat };
+  const dpct = Number(d.discPct) || 0, disc = Math.round(sub * dpct / 100);
+  const nsub = sub - disc;
+  const pct = Number(d.vatPct) || 0, vat = Math.round(nsub * pct / 100);
+  return { sub, pct, vat, total: nsub + vat, disc, dpct };
 }
 function invTotal(i) {
   const s = i.items.reduce((a, l) => a + l.qty * l.price, 0);
-  return (i.subtotal !== undefined ? i.subtotal : s) + (i.vat || 0);
+  const sub = i.subtotal !== undefined ? i.subtotal : s;
+  return sub - (i.disc || 0) + (i.vat || 0);
 }
 function invTotalsHTML(d) {
   const t = invTotals(d);
   const row = "display:flex;justify-content:space-between;gap:16px;padding:6px 0;font-size:.9rem;";
   return `<div style="${row}"><span>Subtotal</span><span class="money">${money(t.sub, d.currency)}</span></div>
+    ${t.dpct > 0 ? `<div style="${row}"><span>Discount (${t.dpct}%)</span><span class="money">−${money(t.disc, d.currency)}</span></div>` : ""}
     <div style="${row}"><span>VAT (${t.pct}%)</span><span class="money">${money(t.vat, d.currency)}</span></div>
     <div class="money" style="display:flex;justify-content:space-between;gap:16px;font-size:1.2rem;border-top:2px solid #000;padding-top:10px;margin-top:6px"><span>Total</span><span>${money(t.total, d.currency)}</span></div>`;
 }
@@ -490,6 +541,7 @@ function vInvEditor() {
         <label class="f">Client email<input data-if="clientEmail" value="${esc(d.clientEmail)}"></label>
         <label class="f">Currency<select data-if="currency"><option${d.currency === "USD" ? " selected" : ""}>USD</option><option${d.currency === "NGN" ? " selected" : ""}>NGN</option></select></label>
         <label class="f">VAT %<input type="number" min="0" max="100" step="0.5" data-if="vatPct" value="${d.vatPct}"></label>
+        <label class="f">Discount %<input type="number" min="0" max="100" step="0.5" data-if="discPct" value="${d.discPct}"></label>
         <label class="f">Due date<input type="date" data-if="dueAt" value="${esc(d.dueAt)}"></label>
         <label class="f">Link contract (optional)<select data-if="contractId"><option value="">Standalone (no contract)</option>
           ${S.contracts.map((c) => `<option value="${c.id}"${d.contractId === c.id ? " selected" : ""}>${esc(c.ref)} · ${esc(c.project.name)}</option>`).join("")}</select></label>
@@ -521,7 +573,7 @@ function persistInv() {
     clientName: d.clientName, clientEmail: d.clientEmail, notes: d.notes,
     clientId: (linked && linked.client.id) || store.clientIdFor(d.clientName),
     depPaid: false, balPaid: false,
-    subtotal: t.sub, vat: t.vat, vatPct: t.pct,
+    subtotal: t.sub, vat: t.vat, vatPct: t.pct, disc: t.disc, discPct: t.dpct,
     items: lines.map((i) => ({ name: i.name, desc: i.desc, qty: Number(i.qty) || 1, price: Number(i.price) || 0 })) };
   S.invoices.push(inv); store.save();
   route = { view: "invoice", id: inv.id }; render(); toast("Invoice created.");
@@ -597,6 +649,7 @@ function render() {
   if (route.view === "dashboard") app.innerHTML = vDashboard();
   else if (route.view === "contracts") app.innerHTML = vContracts();
   else if (route.view === "clients") app.innerHTML = vClients();
+  else if (route.view === "client-edit") app.innerHTML = vClientEdit();
   else if (route.view === "picker") app.innerHTML = vPicker();
   else if (route.view === "editor") { app.innerHTML = vEditor(); enableEd(); }
   else if (route.view === "document") { app.innerHTML = vDocument(route.id); padD = pad("pad-d"); padC = pad("pad-c"); }
@@ -629,6 +682,10 @@ document.addEventListener("input", (e) => {
       it[field] = (field === "qty" || field === "price") ? Number(t.value) : t.value;
       refreshInvTotals();
     }
+    return;
+  }
+  if (route.view === "client-edit" && draftClient) {
+    if (t.dataset.cf) { draftClient[t.dataset.cf] = t.value; }
     return;
   }
   if (route.view === "editor" && draft) {
@@ -748,6 +805,35 @@ document.addEventListener("click", async (e) => {
   else if (act === "del-tpl") {
     const t = S.templates.find((x) => x.id === id);
     if (t && confirm(`Delete template "${t.name}"?`)) { S.templates = S.templates.filter((x) => x.id !== id); store.save(); render(); }
+  }
+  else if (act === "new-client") {
+    draftClient = { id: "", name: "", business: "", email: "", phone: "", _isNew: true, _oldKey: "" };
+    route = { view: "client-edit", id: null }; render();
+  }
+  else if (act === "edit-client") {
+    const r = S.clients.find((x) => x.id === id) || S.clients.find((x) => ("n:" + String(x.name || "").trim().toLowerCase()) === id);
+    if (!r) return;
+    draftClient = { ...r, _isNew: false, _oldKey: (r.id || ("n:" + String(r.name || "").trim().toLowerCase())) };
+    route = { view: "client-edit", id: null }; render();
+  }
+  else if (act === "cancel-client") { draftClient = null; route = { view: "clients", id: null }; render(); }
+  else if (act === "save-client") {
+    const d = draftClient;
+    if (!d.name.trim()) { const er = $("#err"); if (er) er.innerHTML = `<div class="alert">Client name is required.</div>`; return; }
+    if (d._isNew) d.id = store.clientIdFor(d.name);
+    const r = upsertClient(d);
+    const key = d._isNew ? ("n:" + d.name.trim().toLowerCase()) : d._oldKey;
+    S.contracts.forEach((c) => {
+      const ck = c.client.id || ("n:" + String(c.client.name || "").trim().toLowerCase());
+      if (ck && ck === key) { c.client.name = r.name; c.client.business = r.business; c.client.email = r.email; c.client.phone = r.phone; if (!c.client.id && r.id) c.client.id = r.id; }
+    });
+    S.invoices.forEach((i) => {
+      const linked = i.contractId ? S.contracts.find((x) => x.id === i.contractId) : null;
+      const ck = (linked && linked.client.id) || i.clientId || ("n:" + String(i.clientName || "").trim().toLowerCase());
+      if (ck && ck === key) { i.clientName = r.name; i.clientEmail = r.email; if (!i.clientId && r.id) i.clientId = r.id; }
+    });
+    store.save(); draftClient = null;
+    route = { view: "clients", id: null }; render(); toast("Client saved everywhere.");
   }
   else if (act === "save-lock") {
     const a = $("#set-pass").value, b2 = $("#set-pass2").value;
@@ -933,12 +1019,28 @@ document.getElementById("code").select();
 alert("Return code ready. Copy it and send it back to the studio.");
 };<\/script></body></html>`;
 }
+/* Create or refresh an explicit client record. */
+function upsertClient(rec) {
+  if (!rec || (!rec.id && !rec.name)) return null;
+  const nm = String(rec.name || "").trim().toLowerCase();
+  let r = rec.id ? S.clients.find((x) => x.id === rec.id) : null;
+  if (!r && nm) r = S.clients.find((x) => String(x.name || "").trim().toLowerCase() === nm);
+  if (r) {
+    if (rec.id) r.id = rec.id;
+    ["name", "business", "email", "phone"].forEach((k) => { if (rec[k] !== undefined) r[k] = rec[k]; });
+  } else {
+    r = { id: rec.id || "", name: rec.name || "", business: rec.business || "", email: rec.email || "", phone: rec.phone || "" };
+    S.clients.push(r);
+  }
+  return r;
+}
 function persistDraft(silent) {
   if (!draft.client.name || !draft.project.name) {    const er = $("#err"); if (er) er.innerHTML = `<div class="alert">Client name and project name are required.</div>`;
     if (!silent) window.scrollTo(0, 0); return false;
   }
   draft.money.depositPct = Number(draft.money.depositPct) >= 100 ? 100 : 75;
   draft.client.id = store.clientIdFor(draft.client.name);
+  upsertClient({ id: draft.client.id, name: draft.client.name, business: draft.client.business, email: draft.client.email, phone: draft.client.phone });
   const i = S.contracts.findIndex((x) => x.id === draft.id);
   if (i >= 0) S.contracts[i] = draft; else S.contracts.push(draft);
   store.save(); return true;
@@ -954,7 +1056,7 @@ function raiseInvoice(contractId) {
     clientName: c.client.name, clientEmail: c.client.email,
     clientId: c.client.id || "",
     depPaid: false, balPaid: false,
-    subtotal: t.sub, vat: t.vat, vatPct: t.pct,
+    subtotal: t.sub, vat: t.vat, vatPct: t.pct, disc: 0, discPct: 0,
     items: [
       { name: c.project.name, desc: `Deposit ${c.money.depositPct}% — required to start work, VAT inclusive`, qty: 1, price: t.dep },
       { name: c.project.name, desc: "Balance — due before digital files transfer, VAT inclusive", qty: 1, price: t.bal }
