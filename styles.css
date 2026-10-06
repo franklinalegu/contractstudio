@@ -123,6 +123,8 @@ table.list tr:hover td { background: #00000008; }
 
 /* invoice doc */
 .inv-head { display: flex; justify-content: space-between; margin-bottom: 32px; }
+.inv-brand { display: flex; gap: 12px; align-items: center; font-size: 0.85rem; }
+.inv-mark { font-family: var(--font-display); font-weight: 700; background: #000; color: #fff; padding: 10px 12px; letter-spacing: 0.1em; }
 .inv-total { background: var(--black); color: #fff; padding: 16px 24px; font-family: var(--font-display); font-size: 1.3rem; display: flex; justify-content: space-between; }
 
 .empty { text-align: center; padding: 48px; color: var(--stone); }
@@ -159,7 +161,7 @@ table.list tr:hover td { background: #00000008; }
   body { background: #fff; }
   .shell { display: block; }
   .main { max-width: none; padding: 0; }
-  .doc, .doc-olive, .doc-quote, .doc-beige, .doc-table th, .doc-info .bar, .inv-total { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .doc, .doc-olive, .doc-quote, .doc-beige, .doc-table th, .doc-info .bar, .inv-total, .inv-mark { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .doc { border: 0; }
   .doc-page { border: 0; break-after: auto; padding: 36px 40px; }
   .doc-top { margin-bottom: 40px; }

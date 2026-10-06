@@ -78,7 +78,11 @@ function defaultTemplates() {
     { id: "webinar-branding", name: "Webinar Branding", scope: "Webinar identity and launch assets", summary: "", options: "2 creative directions, 2 revision rounds", deliverables: ["Webinar title lockup and theme", "Slide deck design", "Promotional flyers and banners", "Social media announcement kit", "Workbook or handout design"], phases: P([["Discovery", 1], ["Design", 2], ["Refinement", 1], ["Handover", 1]]), depositPct: 75, vatPct: 7.5, pay: { m1: "", m2: "" } },
     { id: "social-media-templates", name: "Social Media Templates", scope: "Editable social media template system", summary: "", options: "2 style directions, 2 revision rounds, editable source files included", deliverables: ["Feed post templates", "Story and reel cover templates", "Profile and highlight covers", "Caption and hashtag guide"], phases: P([["Discovery", 1], ["Design", 2], ["Refinement", 1], ["Handover", 1]]), depositPct: 75, vatPct: 7.5, pay: { m1: "", m2: "" } },
     { id: "wedding-branding", name: "Wedding Branding", scope: "Wedding identity and stationery suite", summary: "", options: "2 creative directions, 2 revision rounds", deliverables: ["Couple monogram and theme", "Invitation suite", "Ceremony programs and signage", "Souvenir and packaging design"], phases: P([["Discovery", 1], ["Design", 2], ["Refinement", 1], ["Production handover", 1]]), depositPct: 75, vatPct: 7.5, pay: { m1: "", m2: "" } },
-    { id: "presentations-profile", name: "Presentations & Company Profile", scope: "Pitch decks and company profile documents", summary: "", options: "2 style directions, 2 revision rounds, editable source files included", deliverables: ["Slide deck design", "Company profile document", "Infographics and charts", "Editable master templates"], phases: P([["Discovery", 1], ["Design", 2], ["Refinement", 1], ["Handover", 1]]), depositPct: 75, vatPct: 7.5, pay: { m1: "", m2: "" } },
+    { id: "presentations", name: "Presentations", scope: "Slide decks and pitch presentations", summary: "", options: "2 style directions, 2 revision rounds, editable source files included", deliverables: ["Slide deck design", "Infographics and charts", "Speaker notes", "Editable master template"], phases: P([["Discovery", 1], ["Design", 2], ["Refinement", 1], ["Handover", 1]]), depositPct: 75, vatPct: 7.5, pay: { m1: "", m2: "" } },
+    { id: "company-profile", name: "Company Profile", scope: "Company profile documents", summary: "", options: "2 style directions, 2 revision rounds, print-ready and digital versions", deliverables: ["Company profile document", "Infographics and charts", "Print-ready and digital versions"], phases: P([["Discovery", 1], ["Design", 2], ["Refinement", 1], ["Handover", 1]]), depositPct: 75, vatPct: 7.5, pay: { m1: "", m2: "" } },
+    { id: "digital-illustrations", name: "Digital Illustrations", scope: "Custom illustration sets", summary: "", options: "2 style directions, 2 revision rounds, source files included", deliverables: ["Hero illustrations", "Spot illustrations set", "Icon set", "Source files"], phases: P([["Discovery", 1], ["Design", 2], ["Refinement", 1], ["Handover", 1]]), depositPct: 75, vatPct: 7.5, pay: { m1: "", m2: "" } },
+    { id: "ads-placement", name: "Ads Placement", scope: "Paid ad placement management", summary: "", options: "Monthly placement report with creative rotation", deliverables: ["Media plan", "Ad setup and launch", "Monitoring and optimization", "Monthly performance report"], phases: P([["Planning", 1], ["Launch", 1], ["Optimization", 2], ["Reporting", 1]]), depositPct: 100, vatPct: 7.5, pay: { m1: "", m2: "" } },
+    { id: "digital-marketing", name: "Digital Marketing", scope: "Marketing execution and growth", summary: "", options: "Monthly content calendar and growth report", deliverables: ["Marketing audit", "Content calendar", "Campaign management", "Monthly growth report"], phases: P([["Audit", 1], ["Setup", 1], ["Management", 4], ["Reporting", 1]]), depositPct: 75, vatPct: 7.5, pay: { m1: "", m2: "" } },
     { id: "web-applications", name: "Web Applications / Software", scope: "Web app design and development", summary: "", options: "Milestone demos, 2 revision rounds per milestone", deliverables: ["UX flows and wireframes", "UI design system", "Application development", "Testing and deployment"], phases: P([["Discovery", 1], ["Design", 2], ["Build", 4], ["Launch", 1]]), depositPct: 75, vatPct: 7.5, pay: { m1: "", m2: "" } }
   ];
 }
@@ -221,7 +225,8 @@ function invoiceHTML(inv) {
   const hasVat = inv.subtotal !== undefined;
   const vSub = hasVat ? inv.subtotal : sum, vVat = hasVat ? inv.vat : 0;
   return `<div class="doc"><div class="doc-page">
-    <div class="inv-head"><div></div>
+    <div class="inv-head"><div class="inv-brand"><span class="inv-mark">MJB</span>
+      <span><strong>MRJAMESBRAND LTD</strong><br>${esc(S.settings.email)}</span></div>
       <div style="text-align:right"><h2 style="font-size:2.2rem">INVOICE</h2><p>${esc(inv.ref)} · ${esc(inv.createdAt)}</p>
       <span class="badge b-${inv.status.toLowerCase()}">${inv.status}</span></div></div>
     <div class="grid2"><div><h4>Bill To</h4><p>${esc(inv.clientName)}<br>${esc(inv.clientEmail)}</p></div>
@@ -230,7 +235,8 @@ function invoiceHTML(inv) {
       ${inv.items.map((i) => `<tr><td><strong>${esc(i.name)}</strong><br>${esc(i.desc || "")}</td><td>${i.qty}</td><td>${money(i.price, inv.currency)}</td><td>${money(i.qty * i.price, inv.currency)}</td></tr>`).join("")}
     </table>
     ${hasVat ? `<p style="text-align:right">Subtotal: ${money(vSub, inv.currency)}<br>VAT (${inv.vatPct}%): ${money(vVat, inv.currency)}</p>` : ""}
-    <div class="inv-total"><span>TOTAL</span><span>${money(sum, inv.currency)}</span></div>
+    <div class="inv-total"><span>TOTAL</span><span>${money(vSub + vVat, inv.currency)}</span></div>
+    ${inv.notes ? `<p class="mt"><strong>Notes:</strong> ${esc(inv.notes)}</p>` : ""}
     <div class="doc-beige"><h4>Pay To: Official Studio Accounts</h4>
       <table class="doc-table"><tr><th>Bank</th><th>Account Name</th><th>Account Number</th></tr>
         <tr><td>${OFFICIAL.zenith.bank}</td><td>${OFFICIAL.zenith.name}</td><td>${OFFICIAL.zenith.number}</td></tr>
@@ -248,7 +254,7 @@ function nav() { $$(".navlink").forEach((b) => b.classList.toggle("active", b.da
 function vDashboard() {
   const cs = S.contracts, inv = S.invoices;
   const signed = cs.filter((c) => c.status === "SIGNED").length;
-  const owed = inv.filter((i) => i.status !== "PAID").reduce((s, i) => s + i.items.reduce((a, l) => a + l.qty * l.price, 0), 0);
+  const owed = inv.filter((i) => i.status !== "PAID").reduce((s, i) => s + invTotal(i), 0);
   return `<div id="glow" class="no-print" aria-hidden="true"></div>
     <p class="eyebrow">Contract Studio</p>
     <h1 class="page-title">Prepare &amp; <span class="hl">sign contracts.</span></h1>
@@ -371,17 +377,18 @@ function vDocument(id) {
         <p><button class="btn btn-ghost" data-act="clear-c">Clear</button> <button class="btn btn-lime" data-act="sign-c" data-id="${c.id}">Sign as client</button></p></div></div>
       <label class="f mt">Comments<textarea id="sg-comments">${esc(c.sign.comments)}</textarea></label>
     </div>` : ""}
-    ${invs.length ? `<h3 style="margin:20px 0 10px">Invoices</h3>${invs.map((i) => `<p><button class="btn btn-ghost" data-act="open-inv" data-id="${i.id}">${esc(i.ref)} · ${i.status} · ${money(i.items.reduce((s, l) => s + l.qty * l.price, 0), i.currency)}</button></p>`).join("")}` : ""}
+    ${invs.length ? `<h3 style="margin:20px 0 10px">Invoices</h3>${invs.map((i) => `<p><button class="btn btn-ghost" data-act="open-inv" data-id="${i.id}">${esc(i.ref)} · ${i.status} · ${money(invTotal(i), i.currency)}</button></p>`).join("")}` : ""}
     <div class="mt">${docHTML(c)}</div>`;
 }
 
 function vInvoices() {
   const inv = S.invoices.slice().reverse();
   return `<p class="eyebrow">Admin</p><h1 class="page-title">All <span class="hl">invoices</span></h1>
+    <div class="toolbar"><span class="spacer"></span><button class="btn btn-primary" data-act="new-inv">+ New invoice</button></div>
     ${inv.length ? `<div class="card" style="padding:0;overflow:auto"><table class="list">
       <tr><th>Reference</th><th>Client</th><th>Amount</th><th>Status</th><th>Due</th><th></th></tr>
       ${inv.map((i) => `<tr><td><strong>${esc(i.ref)}</strong></td><td>${esc(i.clientName)}</td>
-        <td class="money">${money(i.items.reduce((s, l) => s + l.qty * l.price, 0), i.currency)}</td>
+        <td class="money">${money(invTotal(i), i.currency)}</td>
         <td>${badge(i.status)}</td><td>${esc(i.dueAt || "")}</td>
         <td><div class="rowactions"><button data-act="open-inv" data-id="${i.id}">Open</button></div></td></tr>`).join("")}
     </table></div>` : `<div class="card empty">No invoices yet. Sign a contract first, then raise one.</div>`}`;
@@ -395,6 +402,78 @@ function vInvoice(id) {
       ${i.status !== "PAID" ? `<button class="btn btn-lime" data-act="paid" data-id="${i.id}">Mark PAID</button>` : ""}
       <span class="spacer"></span><button class="btn" onclick="window.print()">Print / PDF</button>
     </div>${invoiceHTML(i)}`;
+}
+
+/* ---------- standalone invoice builder ---------- */
+let draftInv = null;
+function blankInv() {
+  return { clientName: "", clientEmail: "", currency: "USD", vatPct: 7.5,
+    dueAt: new Date(Date.now() + 14 * 864e5).toISOString().slice(0, 10),
+    notes: "", contractId: "", items: [{ name: "", desc: "", qty: 1, price: 0 }] };
+}
+function invTotals(d) {
+  const sub = d.items.reduce((s, i) => s + (Number(i.qty) || 0) * (Number(i.price) || 0), 0);
+  const pct = Number(d.vatPct) || 0, vat = Math.round(sub * pct / 100);
+  return { sub, pct, vat, total: sub + vat };
+}
+function invTotal(i) {
+  const s = i.items.reduce((a, l) => a + l.qty * l.price, 0);
+  return (i.subtotal !== undefined ? i.subtotal : s) + (i.vat || 0);
+}
+function invTotalsHTML(d) {
+  const t = invTotals(d);
+  const row = "display:flex;justify-content:space-between;gap:16px;padding:6px 0;font-size:.9rem;";
+  return `<div style="${row}"><span>Subtotal</span><span class="money">${money(t.sub, d.currency)}</span></div>
+    <div style="${row}"><span>VAT (${t.pct}%)</span><span class="money">${money(t.vat, d.currency)}</span></div>
+    <div class="money" style="display:flex;justify-content:space-between;gap:16px;font-size:1.2rem;border-top:2px solid #000;padding-top:10px;margin-top:6px"><span>Total</span><span>${money(t.total, d.currency)}</span></div>`;
+}
+function vInvEditor() {
+  const d = draftInv;
+  return `<p class="eyebrow">Admin · new invoice ${d.contractId ? "(linked)" : "(standalone)"}</p>
+    <h1 class="page-title">New <span class="hl">invoice</span></h1>
+    <div class="toolbar no-print">
+      <button class="btn btn-primary" data-act="save-inv">Save invoice</button>
+      <button class="btn btn-ghost" data-act="cancel-inv">Cancel</button>
+    </div><div id="err"></div>
+    <div class="card no-print" style="max-width:760px">
+      <h3>Bill To</h3><div class="formgrid">
+        <label class="f">Client name*<input data-if="clientName" value="${esc(d.clientName)}"></label>
+        <label class="f">Client email<input data-if="clientEmail" value="${esc(d.clientEmail)}"></label>
+        <label class="f">Currency<select data-if="currency"><option${d.currency === "USD" ? " selected" : ""}>USD</option><option${d.currency === "NGN" ? " selected" : ""}>NGN</option></select></label>
+        <label class="f">VAT %<input type="number" min="0" max="100" step="0.5" data-if="vatPct" value="${d.vatPct}"></label>
+        <label class="f">Due date<input type="date" data-if="dueAt" value="${esc(d.dueAt)}"></label>
+        <label class="f">Link contract (optional)<select data-if="contractId"><option value="">Standalone (no contract)</option>
+          ${S.contracts.map((c) => `<option value="${c.id}"${d.contractId === c.id ? " selected" : ""}>${esc(c.ref)} · ${esc(c.project.name)}</option>`).join("")}</select></label>
+        <label class="f full">Notes<textarea data-if="notes">${esc(d.notes)}</textarea></label>
+      </div>
+      <h3 class="mt">Services <span style="font-weight:400;font-size:.8rem;color:var(--stone)">name, description and cost per line</span></h3>
+      <div id="iilist">
+        ${d.items.map((it, i) => `<div class="deliverable-row" style="display:grid;grid-template-columns:2fr 3fr 1fr 1.5fr auto;align-items:start">
+          <input data-ii="${i}:name" value="${esc(it.name)}" placeholder="Service">
+          <input data-ii="${i}:desc" value="${esc(it.desc)}" placeholder="Description">
+          <input type="number" min="1" data-ii="${i}:qty" value="${it.qty}">
+          <input type="number" min="0" data-ii="${i}:price" value="${it.price}">
+          <button data-act="del-ii" data-i="${i}">×</button></div>`).join("")}
+      </div>
+      <p class="mt"><button class="btn btn-ghost" data-act="add-ii">+ Add line</button></p>
+      <div class="mt" id="invtotals" style="max-width:320px;margin-left:auto">${invTotalsHTML(d)}</div>
+    </div>`;
+}
+function refreshInvTotals() { const t = $("#invtotals"); if (t && draftInv) t.innerHTML = invTotalsHTML(draftInv); }
+function persistInv() {
+  const d = draftInv;
+  if (!d.clientName) { const er = $("#err"); if (er) er.innerHTML = `<div class="alert">Client name is required.</div>`; window.scrollTo(0, 0); return false; }
+  const lines = d.items.filter((i) => i.name && Number(i.price) > 0);
+  if (!lines.length) { const er = $("#err"); if (er) er.innerHTML = `<div class="alert">Add at least one service line with a cost above zero.</div>`; return false; }
+  const t = invTotals({ ...d, items: lines });
+  const inv = { id: uid(), ref: "INV-MJB-" + new Date().getFullYear() + "-" + String(Math.floor(1000 + Math.random() * 9000)),
+    contractId: d.contractId || null, status: "SENT", currency: d.currency, createdAt: todayISO(), dueAt: d.dueAt || null,
+    clientName: d.clientName, clientEmail: d.clientEmail, notes: d.notes,
+    subtotal: t.sub, vat: t.vat, vatPct: t.pct,
+    items: lines.map((i) => ({ name: i.name, desc: i.desc, qty: Number(i.qty) || 1, price: Number(i.price) || 0 })) };
+  S.invoices.push(inv); store.save();
+  route = { view: "invoice", id: inv.id }; render(); toast("Invoice created.");
+  return true;
 }
 
 function vSettings() {
@@ -464,6 +543,7 @@ function render() {
   else if (route.view === "document") { app.innerHTML = vDocument(route.id); padD = pad("pad-d"); padC = pad("pad-c"); }
   else if (route.view === "invoices") app.innerHTML = vInvoices();
   else if (route.view === "invoice") app.innerHTML = vInvoice(route.id);
+  else if (route.view === "invoice-edit") app.innerHTML = vInvEditor();
   else if (route.view === "settings") app.innerHTML = vSettings();
   nav();
   window.scrollTo(0, 0);
@@ -475,6 +555,23 @@ function refreshPreviewEd() { refreshPreview(); enableEd(); }
 
 document.addEventListener("input", (e) => {
   const t = e.target;
+  if (route.view === "invoice-edit" && draftInv) {
+    if (t.dataset.if) {
+      const k = t.dataset.if;
+      draftInv[k] = (t.type === "number") ? Number(t.value) : t.value;
+      if (k === "contractId" && t.value) {
+        const c = S.contracts.find((x) => x.id === t.value);
+        if (c) { draftInv.clientName = c.client.name; draftInv.clientEmail = c.client.email; draftInv.currency = c.money.currency; draftInv.vatPct = totals(c).pct; render(); return; }
+      }
+      refreshInvTotals();
+    } else if (t.dataset.ii !== undefined) {
+      const [idx, field] = t.dataset.ii.split(":");
+      const it = draftInv.items[Number(idx)]; if (!it) return;
+      it[field] = (field === "qty" || field === "price") ? Number(t.value) : t.value;
+      refreshInvTotals();
+    }
+    return;
+  }
   if (route.view === "editor" && draft) {
     if (t.dataset.f) { const num = t.type === "number" || t.dataset.f === "money.depositPct"; setPath(draft, t.dataset.f, num ? Number(t.value) : t.value); refreshPreviewEd(); }
     else if (t.dataset.d !== undefined) { draft.project.deliverables[Number(t.dataset.d)] = t.value; refreshPreviewEd(); }
@@ -558,6 +655,11 @@ document.addEventListener("click", async (e) => {
     } catch (e) { alert("Invalid return code."); }
   }
   else if (act === "open-inv") { route = { view: "invoice", id }; render(); }
+  else if (act === "new-inv") { draftInv = blankInv(); route = { view: "invoice-edit", id: null }; render(); }
+  else if (act === "cancel-inv") { draftInv = null; route = { view: "invoices", id: null }; render(); }
+  else if (act === "add-ii") { if (draftInv) { draftInv.items.push({ name: "", desc: "", qty: 1, price: 0 }); render(); } }
+  else if (act === "del-ii") { if (draftInv && draftInv.items.length > 1) { draftInv.items.splice(Number(b.dataset.i), 1); render(); } }
+  else if (act === "save-inv") { if (draftInv) persistInv(); }
   else if (act === "paid") { const i = S.invoices.find((x) => x.id === id); i.status = "PAID"; store.save(); render(); }
   else if (act === "add-d") { draft.project.deliverables.push(""); render(); }
   else if (act === "del-d") { if (draft.project.deliverables.length > 1) draft.project.deliverables.splice(Number(b.dataset.i), 1); render(); }
