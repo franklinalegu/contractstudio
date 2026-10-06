@@ -142,10 +142,15 @@ table.list tr:hover td { background: #00000008; }
 
 @media (max-width: 1000px) {
   .editor { grid-template-columns: 1fr; }
-  .grid3, .formgrid, .grid2 { grid-template-columns: 1fr; }
+  .grid3, .formgrid, .grid2, .sig-grid, .sig-meta { grid-template-columns: 1fr; }
+  .sig-meta dt { margin-top: 8px; }
   .sidebar { display: none; }
   .main { padding: 20px; }
   .doc-page { padding: 32px 24px; }
+  .doc-info { grid-template-columns: 28px 118px 1fr; }
+  .doc-info > div { padding: 10px 12px; letter-spacing: 0.1em; }
+  .doc td, .doc-info > div, .sig-meta dd { overflow-wrap: anywhere; min-width: 0; }
+  .doc-hero { font-size: clamp(2.4rem, 15vw, 5.5rem); }
 }
 
 /* print: document only, colors kept, no empty gaps */
