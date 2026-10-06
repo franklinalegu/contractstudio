@@ -23,7 +23,7 @@ function blankContract() {
     status: "DRAFT", createdAt: todayISO(),
     client: { name: "", business: "", industry: "", email: "", phone: "" },
     project: { name: "", scope: "", summary: "", deliverables: [""], options: "3 initial concepts, 2 revision rounds", revisions: "" },
-    money: { currency: "USD", quote: 0, depositPct: 50, vatPct: 7.5 },
+    money: { currency: "USD", quote: 0, depositPct: 75, vatPct: 7.5 },
     pay: { m1: "", m2: "" },
     duration: { phases: [{ name: "Discovery & Research", weeks: 1 }, { name: "Concept Development", weeks: 2 }, { name: "Refinement", weeks: 1 }, { name: "Final Handover", weeks: 1 }] },
     sign: { designerName: store.data.settings.designer, designerSig: "", clientName: "", clientSig: "", date: "", paymentMethod: "", paymentDate: "", comments: "" }
@@ -40,9 +40,16 @@ const S = store.data;
 let route = { view: "dashboard", id: null };
 let draft = null;
 
+/* Official studio accounts — constant on every invoice (mirrors mrjamesbrand repo). */
+const OFFICIAL = {
+  zenith: { bank: "Zenith Bank", name: "MRJAMESBRAND LIMITED", number: "1229578097" },
+  kuda: { bank: "Kuda MFB", name: "MRJAMESBRAND LTD", number: "3004035777" },
+  finance: "finance@mrjamesbrandltd.com"
+};
+
 /* ---------- fixed legal text (from contract template) ---------- */
 const T = {
-  deposit: "A deposit of 50% of the quoted fee is required before any work begins; this is standard practice. The balance falls due when the final design is approved, and all digital files are released only after it clears. Full rights in the design transfer on that final payment, not before.",
+  deposit: "A deposit of 75% or 100% of the quoted fee is required before any work begins; this is standard practice. The balance falls due when the final design is approved, and all digital files are released only after it clears. Full rights in the design transfer on that final payment, not before.",
   secure: "Your slot is booked when the deposit lands, and a receipt follows immediately. This quote is a package price: add or remove items and the pricing of the rest may move, and every figure here holds for 30 days from the document date. On the scope described, this budget is a final price commitment.",
   cancel: "Cancel after concepts have been presented and payments made stay non-refundable, though a fair share can come back depending on work completed. If the designer cannot finish through illness or emergency, you are refunded in full in most cases; completed work is handed over so another designer can continue, with a fair share retained for it.",
   suspend: "You are hiring judgment, not just hands: direction is welcome, but constant second-guessing stalls the very work it means to improve. The designer may pause the project if trust breaks down, if approvals stall after a reasonable number of unique concepts, or if the balance is withheld. Fair warning always comes first. Paused or ended work earns no refund, and every concept stays designer property.",
@@ -94,7 +101,7 @@ function docHTML(c, ed) {
       <div class="doc-olive"><h4>Deliverables &amp; revisions</h4>
         <p><span${E("project.options", "Options & revisions statement")}>${esc(c.project.options)}</span>. Costs valid 30 days from document date.</p>
         <p>Subtotal: <strong>${money(t.sub, c.money.currency)}</strong><br>Plus VAT (<span${E("money.vatPct", "7.5")}>${t.pct}</span>%): <strong>${money(t.vat, c.money.currency)}</strong></p>
-        <h4>Payment Breakdown: <span${E("money.depositPct", "50")}>${c.money.depositPct}</span>% deposit, ${100 - c.money.depositPct}% before file delivery</h4>
+        <h4>Payment Breakdown: <span${E("money.depositPct", "75")}>${c.money.depositPct}</span>% deposit, ${100 - c.money.depositPct}% before file delivery</h4>
         <p>Deposit (to start work): <strong>${money(t.dep, c.money.currency)}</strong><br>Balance (before files transfer): <strong>${money(t.bal, c.money.currency)}</strong></p></div>
       <div class="doc-foot"><span>MRJAMESBRAND LTD</span></div>
     </div>
@@ -177,6 +184,11 @@ function invoiceHTML(inv) {
     </table>
     ${hasVat ? `<p style="text-align:right">Subtotal: ${money(vSub, inv.currency)}<br>VAT (${inv.vatPct}%): ${money(vVat, inv.currency)}</p>` : ""}
     <div class="inv-total"><span>TOTAL</span><span>${money(sum, inv.currency)}</span></div>
+    <div class="doc-beige"><h4>Pay To: Official Studio Accounts</h4>
+      <table class="doc-table"><tr><th>Bank</th><th>Account Name</th><th>Account Number</th></tr>
+        <tr><td>${OFFICIAL.zenith.bank}</td><td>${OFFICIAL.zenith.name}</td><td>${OFFICIAL.zenith.number}</td></tr>
+        <tr><td>${OFFICIAL.kuda.bank}</td><td>${OFFICIAL.kuda.name}</td><td>${OFFICIAL.kuda.number}</td></tr></table>
+      <p>Use ${esc(inv.ref)} as payment narration. Send proof of payment to ${OFFICIAL.finance}.</p></div>
     <p class="mt">Pay to secure / release files per contract terms. Send proof of payment to ${esc(S.settings.email)}.</p>
     <div class="doc-foot"><span>MRJAMESBRAND LTD</span></div>
   </div></div>`;
@@ -253,7 +265,7 @@ function vEditor() {
         <label class="f">Currency<select data-f="money.currency"><option ${c.money.currency === "USD" ? "selected" : ""}>USD</option><option ${c.money.currency === "NGN" ? "selected" : ""}>NGN</option></select></label>
         <label class="f">Quote (before VAT)<input type="number" min="0" data-f="money.quote" value="${c.money.quote}"></label>
         <label class="f">VAT %<input type="number" min="0" max="100" step="0.5" data-f="money.vatPct" value="${t.pct}"></label>
-        <label class="f">Deposit %<input type="number" min="0" max="100" data-f="money.depositPct" value="${c.money.depositPct}"></label>
+        <label class="f">Deposit<select data-f="money.depositPct">${[75, 100].includes(Number(c.money.depositPct)) ? "" : `<option value="${c.money.depositPct}" selected>${c.money.depositPct}% (legacy)</option>`}<option value="75"${Number(c.money.depositPct) === 75 ? " selected" : ""}>75%</option><option value="100"${Number(c.money.depositPct) === 100 ? " selected" : ""}>100%</option></select></label>
         <label class="f">Total (incl. VAT)<input id="totalfield" value="${money(t.total, c.money.currency)}" disabled></label>
         <label class="f">Balance<input id="balfield" value="${money(t.bal, c.money.currency)}" disabled></label>
       </div>
@@ -331,6 +343,11 @@ function vSettings() {
       <label class="f full">Default method one<textarea id="set-wm1">${esc(s.wm1)}</textarea></label>
       <label class="f full">Default method two<textarea id="set-wm2">${esc(s.wm2)}</textarea></label>
     </div><p class="mt"><button class="btn btn-primary" data-act="save-settings">Save settings</button></p></div>
+    <div class="card no-print mt" style="max-width:640px"><h3>Official Accounts (locked)</h3>
+      <p style="font-size:.85rem;color:var(--stone)">Printed on every invoice, identical each time. Matches the mrjamesbrand repo.</p>
+      <table class="list mt"><tr><th>Bank</th><th>Name</th><th>Number</th></tr>
+        <tr><td>${OFFICIAL.zenith.bank}</td><td>${OFFICIAL.zenith.name}</td><td class="money">${OFFICIAL.zenith.number}</td></tr>
+        <tr><td>${OFFICIAL.kuda.bank}</td><td>${OFFICIAL.kuda.name}</td><td class="money">${OFFICIAL.kuda.number}</td></tr></table></div>
     <div class="card no-print mt" style="max-width:640px"><h3>Backup</h3>
       <p style="font-size:.85rem;color:var(--stone)">All contracts, invoices and settings live in this browser. Download a backup copy regularly.</p>
       <p class="mt"><button class="btn btn-ghost" data-act="backup">Download backup</button>
@@ -373,7 +390,7 @@ function refreshPreviewEd() { refreshPreview(); enableEd(); }
 document.addEventListener("input", (e) => {
   const t = e.target;
   if (route.view === "editor" && draft) {
-    if (t.dataset.f) { setPath(draft, t.dataset.f, t.type === "number" ? Number(t.value) : t.value); refreshPreviewEd(); }
+    if (t.dataset.f) { const num = t.type === "number" || t.dataset.f === "money.depositPct"; setPath(draft, t.dataset.f, num ? Number(t.value) : t.value); refreshPreviewEd(); }
     else if (t.dataset.d !== undefined) { draft.project.deliverables[Number(t.dataset.d)] = t.value; refreshPreviewEd(); }
     else if (t.dataset.pn !== undefined) { draft.duration.phases[Number(t.dataset.pn)].name = t.value; refreshPreviewEd(); }
     else if (t.dataset.pw !== undefined) { draft.duration.phases[Number(t.dataset.pw)].weeks = Number(t.value); refreshPreviewEd(); }
@@ -466,6 +483,7 @@ function epCommit(el) {
   else if (path === "money.quote") draft.money.quote = Number(raw.replace(/[^0-9]/g, "")) || 0;
   else if (path === "money.vatPct") draft.money.vatPct = Math.min(100, Math.max(0, Number(raw.replace(/[^0-9.]/g, "")) || 0));
   else if (path === "money.depositPct") draft.money.depositPct = Math.min(100, Math.max(0, Number(raw.replace(/[^0-9]/g, "")) || 0));
+  else if (path === "money.depositPct") draft.money.depositPct = Number(raw.replace(/[^0-9]/g, "")) >= 100 ? 100 : 75;
   else setPath(draft, path, raw);
 }
 function syncForm() {
@@ -542,7 +560,7 @@ textarea.code{min-height:120px;font-size:.7rem}
 .sig-meta{display:grid;grid-template-columns:130px 1fr;gap:6px 12px;font-size:.85rem;margin-top:12px}
 .sig-meta dt{font-weight:700}.sig-meta dd{margin:0;border-bottom:1px solid #0e2f26;min-height:1.4em}
 img.sig{width:100%;height:130px;object-fit:contain;border:1px solid #0e2f26;background:#fff}
-@media print{.noprint{display:none}.doc{border:0}.doc-page{break-after:page;border:0}}
+@media print{.noprint{display:none}.doc,.doc-olive,.doc-quote,.doc-beige,.doc-table th,.doc-info .bar{-webkit-print-color-adjust:exact;print-color-adjust:exact}.doc{border:0}.doc-page{break-after:auto;border:0;padding:36px 40px}.doc-olive,.doc-beige,.doc-quote,.doc-table,.sig-grid{break-inside:avoid}.doc-info>div:empty:not(.bar),.doc td>div:empty,.doc .sig-meta dd:empty{display:none}.doc-info>div:has(+div:empty){display:none}.doc .sig-meta dt:has(+dd:empty){display:none}.doc tr:has(>td:last-child:empty){display:none}}
 </style></head><body><main>
 <h1>Design Contract · ${esc(c.ref)}</h1>
 <p>Please review the contract below, fill in your details, sign, then tap <strong>Generate return code</strong> and send the code back.</p>
@@ -576,10 +594,10 @@ alert("Return code ready. Copy it and send it back to the studio.");
 };<\/script></body></html>`;
 }
 function persistDraft(silent) {
-  if (!draft.client.name || !draft.project.name) {
-    const er = $("#err"); if (er) er.innerHTML = `<div class="alert">Client name and project name are required.</div>`;
+  if (!draft.client.name || !draft.project.name) {    const er = $("#err"); if (er) er.innerHTML = `<div class="alert">Client name and project name are required.</div>`;
     if (!silent) window.scrollTo(0, 0); return false;
   }
+  draft.money.depositPct = Number(draft.money.depositPct) >= 100 ? 100 : 75;
   const i = S.contracts.findIndex((x) => x.id === draft.id);
   if (i >= 0) S.contracts[i] = draft; else S.contracts.push(draft);
   store.save(); return true;
@@ -615,5 +633,12 @@ function raiseInvoice(contractId) {
     });
   }, { passive: true });
 })();
+
+/* filename follows the open document when printing */
+addEventListener("beforeprint", () => {
+  const h = document.querySelector("main .page-title");
+  if (h) document.title = h.textContent.trim().replace(/\s+/g, " ").slice(0, 80);
+});
+addEventListener("afterprint", () => { document.title = "Contracts · MRJAMESBRAND LTD"; });
 
 render();
