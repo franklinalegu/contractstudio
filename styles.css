@@ -85,6 +85,7 @@ table.list tr:hover td { background: #00000008; }
 .b-signed, .b-paid { background: #e2f3e3; color: var(--success); border-color: #9ccc9f; }
 .b-cancelled { background: #f0f0f0; color: #888; border-color: #ccc; }
 .b-overdue { background: #fde7e7; color: var(--error); border-color: #f0a0a0; }
+.b-part { background: #fff4d6; color: #8a6100; border-color: #e8c95c; }
 .rowactions { display: flex; gap: 12px; }
 .rowactions button { background: none; border: 0; padding: 0; font-size: 0.85rem; font-weight: 700; cursor: pointer; color: var(--info); }
 .rowactions button:hover { text-decoration: underline; }

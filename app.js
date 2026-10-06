@@ -125,8 +125,8 @@ function docHTML(c, ed) {
   <div class="doc">
     <div class="doc-page">
       <div class="doc-top">
-        <div class="doc-kicker">PROJECT PROPOSAL // THE HUMAN EDGE</div></div>
-      <h1 class="doc-hero">DESIGN<br>CONTRACT</h1>
+        <div class="doc-kicker">PROJECT PROPOSAL // ${esc(c.client.name || c.client.business || "CLIENT").toUpperCase()}</div></div>
+      <h1 class="doc-hero">${esc((c.templateName || c.project.scope || "Design").toUpperCase())}<br>CONTRACT</h1>
       <div class="doc-info"><div class="bar"></div>
         <div>CLIENT NAME</div><div${E("client.name", "CLIENT NAME HERE")}>${V(c.client.name)}</div>
         <div>BUSINESS</div><div${E("client.business", "BUSINESS NAME HERE")}>${V(c.client.business)}</div>
@@ -229,7 +229,7 @@ function invoiceHTML(inv) {
       <span><strong>MRJAMESBRAND LTD</strong><br>${esc(S.settings.email)}</span></div>
       <div style="text-align:right"><h2 style="font-size:2.2rem">INVOICE</h2><p>${esc(inv.ref)} · ${esc(inv.createdAt)}</p>
       <span class="badge b-${inv.status.toLowerCase()}">${inv.status}</span></div></div>
-    <div class="grid2"><div><h4>Bill To</h4><p>${esc(inv.clientName)}<br>${esc(inv.clientEmail)}</p></div>
+    <div class="grid2"><div><h4>Bill To</h4><p>${esc(inv.clientName)}<br>${esc(inv.clientEmail)}${inv.clientId ? `<br>Client ID: ${esc(inv.clientId)}` : ""}</p></div>
       <div><h4>Contract</h4><p>${esc(c.ref || "")} · ${esc((c.project || {}).name || "")}<br>Due: ${esc(inv.dueAt || "")}</p></div></div>
     <table class="doc-table mt"><tr><th>Item</th><th>Qty</th><th>Price</th><th>Amount</th></tr>
       ${inv.items.map((i) => `<tr><td><strong>${esc(i.name)}</strong><br>${esc(i.desc || "")}</td><td>${i.qty}</td><td>${money(i.price, inv.currency)}</td><td>${money(i.qty * i.price, inv.currency)}</td></tr>`).join("")}
@@ -249,6 +249,24 @@ function invoiceHTML(inv) {
 
 /* ---------- views ---------- */
 function badge(s) { return `<span class="badge b-${s.toLowerCase()}">${s}</span>`; }
+/* Invoice status display: part-paid invoices read PART until both halves land. */
+function invBadge(i) {
+  if (i.status === "SENT" && (i.depPaid || i.balPaid)) return `<span class="badge b-part">PART</span>`;
+  return badge(i.status);
+}
+/* Days of quote validity left (30-day terms). Negative = expired. */
+function validityDays(c) {
+  const d = new Date(c.createdAt).getTime();
+  if (isNaN(d)) return 30;
+  return 30 - Math.floor((Date.now() - d) / 864e5);
+}
+function validityBadge(c) {
+  const n = validityDays(c);
+  if (c.status === "SIGNED") return `<span class="badge b-signed">SIGNED</span>`;
+  if (n < 0) return `<span class="badge b-overdue">EXPIRED</span>`;
+  if (n <= 7) return `<span class="badge b-cancelled">${n}D LEFT</span>`;
+  return `<span class="badge b-draft">${n}D LEFT</span>`;
+}
 function nav() { $$(".navlink").forEach((b) => b.classList.toggle("active", b.dataset.view === route.view)); }
 
 function vDashboard() {
@@ -272,11 +290,11 @@ function vDashboard() {
 function contractTable(cs) {
   if (!cs.length) return `<div class="card empty">No contracts yet. <button class="btn btn-primary" data-act="new">Create the first one</button></div>`;
   return `<div class="card" style="padding:0;overflow:auto"><table class="list">
-    <tr><th>Reference</th><th>Client</th><th>Project</th><th>Quote</th><th>Status</th><th></th></tr>
+    <tr><th>Reference</th><th>Client</th><th>Project</th><th>Quote</th><th>Status</th><th>Valid</th><th></th></tr>
     ${cs.map((c) => `<tr><td><strong>${esc(c.ref)}</strong></td><td>${esc(c.client.name) || ""}</td>
       <td>${esc(c.project.name) || ""}</td><td class="money">${money(c.money.quote, c.money.currency)}</td>
-      <td>${badge(c.status)}</td>
-      <td><div class="rowactions"><button data-act="open" data-id="${c.id}">Open</button><button data-act="del" data-id="${c.id}" style="color:var(--error)">Delete</button></div></td></tr>`).join("")}
+      <td>${badge(c.status)}</td><td>${validityBadge(c)}</td>
+      <td><div class="rowactions"><button data-act="open" data-id="${c.id}">Open</button><button data-act="clone" data-id="${c.id}">Clone</button><button data-act="del" data-id="${c.id}" style="color:var(--error)">Delete</button></div></td></tr>`).join("")}
   </table></div>`;
 }
 
@@ -286,8 +304,33 @@ function vContracts() {
     ${contractTable(S.contracts.slice().reverse())}`;
 }
 
-function vPicker() {
-  return `<p class="eyebrow">New contract</p><h1 class="page-title">Pick a <span class="hl">service</span></h1>
+function vClients() {
+  const map = {};
+  const key = (name) => "n:" + String(name || "").trim().toLowerCase();
+  S.contracts.forEach((c) => {
+    const k = c.client.id || key(c.client.name);
+    const r = (map[k] = map[k] || { id: c.client.id || "", name: c.client.name || "", business: "", n: 0, billed: 0, owed: 0, cur: "", multi: false });
+    r.n++; if (!r.business && c.client.business) r.business = c.client.business;
+  });
+  S.invoices.forEach((i) => {
+    const c = i.contractId ? S.contracts.find((x) => x.id === i.contractId) : null;
+    const k = (c && c.client.id) || (c && key(c.client.name)) || i.clientId || key(i.clientName);
+    const r = (map[k] = map[k] || { id: i.clientId || "", name: i.clientName || "", business: (c && c.client.business) || "", n: 0, billed: 0, owed: 0, cur: "", multi: false });
+    if (!r.cur) r.cur = i.currency; else if (r.cur !== i.currency) r.multi = true;
+    r.billed += invTotal(i);
+    if (i.status !== "PAID") r.owed += invTotal(i);
+  });
+  const rows = Object.values(map).sort((a, b) => b.billed - a.billed);
+  const fmt = (r, v) => r.multi ? `${money(v, r.cur || "USD")}*` : money(v, r.cur || "USD");
+  return `<p class="eyebrow">Admin</p><h1 class="page-title">All <span class="hl">clients</span></h1>
+    ${rows.length ? `<div class="card" style="padding:0;overflow:auto"><table class="list">
+      <tr><th>Client ID</th><th>Name</th><th>Contracts</th><th>Billed</th><th>Owed</th></tr>
+      ${rows.map((r) => `<tr><td><strong>${esc(r.id) || "—"}</strong></td><td>${esc(r.name)}${r.business ? `<br><span style="color:var(--stone);font-size:.8rem">${esc(r.business)}</span>` : ""}</td>
+        <td>${r.n}</td><td class="money">${fmt(r, r.billed)}</td><td class="money">${fmt(r, r.owed)}</td></tr>`).join("")}
+    </table></div><p style="font-size:.8rem;color:var(--stone)">${rows.some((r) => r.multi) ? "* Mixed currencies summed by figure." : ""}</p>` : `<div class="card empty">No clients yet — they appear here once you save a contract.</div>`}`;
+}
+
+function vPicker() {  return `<p class="eyebrow">New contract</p><h1 class="page-title">Pick a <span class="hl">service</span></h1>
     <p class="lede">Each service prefills deliverables, phases, deposit and VAT. Same engine, any offering.</p>
     <div class="grid3">
       ${S.templates.map((t) => `<button class="card" style="text-align:left;cursor:pointer" data-act="from-tpl" data-id="${t.id}">
@@ -360,6 +403,7 @@ function vDocument(id) {
       ${next.map((s) => `<button class="btn ${s === "SIGNED" ? "btn-lime" : "btn-primary"}" data-act="status" data-id="${c.id}" data-s="${s}">Mark ${s}</button>`).join("")}
       ${c.status === "SIGNED" ? `<button class="btn btn-primary" data-act="invoice" data-id="${c.id}">+ Raise invoice</button>` : ""}
       <button class="btn btn-ghost" data-act="edit" data-id="${c.id}">Edit</button>
+      <button class="btn btn-ghost" data-act="clone" data-id="${c.id}">Clone</button>
       <button class="btn btn-ghost" data-act="share" data-id="${c.id}">Share for signing</button>
       <button class="btn btn-ghost" data-act="apply-code">Apply client code</button>
       <span class="spacer"></span><button class="btn" onclick="window.print()">Print / PDF</button>
@@ -389,7 +433,7 @@ function vInvoices() {
       <tr><th>Reference</th><th>Client</th><th>Amount</th><th>Status</th><th>Due</th><th></th></tr>
       ${inv.map((i) => `<tr><td><strong>${esc(i.ref)}</strong></td><td>${esc(i.clientName)}</td>
         <td class="money">${money(invTotal(i), i.currency)}</td>
-        <td>${badge(i.status)}</td><td>${esc(i.dueAt || "")}</td>
+        <td>${invBadge(i)}</td><td>${esc(i.dueAt || "")}</td>
         <td><div class="rowactions"><button data-act="open-inv" data-id="${i.id}">Open</button></div></td></tr>`).join("")}
     </table></div>` : `<div class="card empty">No invoices yet. Sign a contract first, then raise one.</div>`}`;
 }
@@ -397,11 +441,16 @@ function vInvoices() {
 function vInvoice(id) {
   const i = S.invoices.find((x) => x.id === id);
   if (!i) return `<div class="card empty">Not found.</div>`;
-  return `<p class="eyebrow">Invoice · ${esc(i.ref)} ${badge(i.status)}</p>
+  return `<p class="eyebrow">Invoice · ${esc(i.ref)} ${invBadge(i)}</p>
     <div class="toolbar no-print">
       ${i.status !== "PAID" ? `<button class="btn btn-lime" data-act="paid" data-id="${i.id}">Mark PAID</button>` : ""}
       <span class="spacer"></span><button class="btn" onclick="window.print()">Print / PDF</button>
-    </div>${invoiceHTML(i)}`;
+    </div>
+    <div class="card no-print" style="max-width:640px;margin-bottom:16px"><h3>Payments received</h3>
+      <div class="formgrid">
+        <label class="f">Deposit<span style="display:flex;align-items:center;gap:10px;margin-top:6px;font-size:.9rem;font-weight:400;text-transform:none;letter-spacing:normal"><input type="checkbox" data-pay="depPaid"${i.depPaid ? " checked" : ""} style="width:22px;height:22px">${i.depPaid ? "Received" : "Awaiting"}</span></label>
+        <label class="f">Balance<span style="display:flex;align-items:center;gap:10px;margin-top:6px;font-size:.9rem;font-weight:400;text-transform:none;letter-spacing:normal"><input type="checkbox" data-pay="balPaid"${i.balPaid ? " checked" : ""} style="width:22px;height:22px">${i.balPaid ? "Received" : "Awaiting"}</span></label>
+      </div></div>${invoiceHTML(i)}`;
 }
 
 /* ---------- standalone invoice builder ---------- */
@@ -466,9 +515,12 @@ function persistInv() {
   const lines = d.items.filter((i) => i.name && Number(i.price) > 0);
   if (!lines.length) { const er = $("#err"); if (er) er.innerHTML = `<div class="alert">Add at least one service line with a cost above zero.</div>`; return false; }
   const t = invTotals({ ...d, items: lines });
+  const linked = d.contractId ? S.contracts.find((x) => x.id === d.contractId) : null;
   const inv = { id: uid(), ref: "INV-MJB-" + new Date().getFullYear() + "-" + String(Math.floor(1000 + Math.random() * 9000)),
     contractId: d.contractId || null, status: "SENT", currency: d.currency, createdAt: todayISO(), dueAt: d.dueAt || null,
     clientName: d.clientName, clientEmail: d.clientEmail, notes: d.notes,
+    clientId: (linked && linked.client.id) || store.clientIdFor(d.clientName),
+    depPaid: false, balPaid: false,
     subtotal: t.sub, vat: t.vat, vatPct: t.pct,
     items: lines.map((i) => ({ name: i.name, desc: i.desc, qty: Number(i.qty) || 1, price: Number(i.price) || 0 })) };
   S.invoices.push(inv); store.save();
@@ -544,6 +596,7 @@ function render() {
   if (side) side.style.display = "";
   if (route.view === "dashboard") app.innerHTML = vDashboard();
   else if (route.view === "contracts") app.innerHTML = vContracts();
+  else if (route.view === "clients") app.innerHTML = vClients();
   else if (route.view === "picker") app.innerHTML = vPicker();
   else if (route.view === "editor") { app.innerHTML = vEditor(); enableEd(); }
   else if (route.view === "document") { app.innerHTML = vDocument(route.id); padD = pad("pad-d"); padC = pad("pad-c"); }
@@ -612,6 +665,14 @@ document.addEventListener("click", async (e) => {
   }
   else if (act === "open") { route = { view: "document", id }; render(); }
   else if (act === "edit") { const c = S.contracts.find((x) => x.id === id); draft = JSON.parse(JSON.stringify(c)); route = { view: "editor", id }; render(); }
+  else if (act === "clone") {
+    const c = S.contracts.find((x) => x.id === id); if (!c) return;
+    const n = JSON.parse(JSON.stringify(c));
+    n.id = uid(); n.ref = "CTR-MJB-" + new Date().getFullYear() + "-" + String(Math.floor(1000 + Math.random() * 9000));
+    n.status = "DRAFT"; n.createdAt = todayISO(); n.project.name = (c.project.name || "") + " (copy)";
+    n.sign = { designerName: S.settings.designer, designerSig: "", clientName: "", clientSig: "", date: "", paymentMethod: "", paymentDate: "", comments: "" };
+    draft = n; route = { view: "editor", id: null }; render(); toast("Cloned as a new draft.");
+  }
   else if (act === "preview") { if (persistDraft(true)) { toast("Contract saved."); route = { view: "document", id: draft.id }; render(); } else window.scrollTo(0, 0); }
   else if (act === "save") { if (persistDraft()) toast("Contract saved ✓"); }
   else if (act === "send") { if (persistDraft()) { draft.status = "SENT"; persistDraft(); route = { view: "document", id: draft.id }; render(); } }
@@ -753,6 +814,13 @@ document.addEventListener("focusout", (e) => {
   if (el && $("#preview") && $("#preview").contains(el)) { refreshPreviewEd(); syncForm(); }
 });
 document.addEventListener("change", (e) => {
+  if (e.target.dataset && e.target.dataset.pay) {
+    const i = S.invoices.find((x) => x.id === route.id); if (!i) return;
+    i[e.target.dataset.pay] = e.target.checked;
+    if (i.depPaid && i.balPaid) i.status = "PAID";
+    else if (i.status === "PAID") i.status = "SENT";
+    store.save(); render(); return;
+  }
   if (e.target.id === "logo-file") {
     const f = e.target.files[0]; e.target.value = ""; if (!f) return;
     if (f.size > 5 * 1024 * 1024) { alert("Logo must be under 5MB."); return; }
@@ -870,6 +938,7 @@ function persistDraft(silent) {
     if (!silent) window.scrollTo(0, 0); return false;
   }
   draft.money.depositPct = Number(draft.money.depositPct) >= 100 ? 100 : 75;
+  draft.client.id = store.clientIdFor(draft.client.name);
   const i = S.contracts.findIndex((x) => x.id === draft.id);
   if (i >= 0) S.contracts[i] = draft; else S.contracts.push(draft);
   store.save(); return true;
@@ -883,10 +952,12 @@ function raiseInvoice(contractId) {
     contractId, status: "SENT", currency: c.money.currency, createdAt: todayISO(),
     dueAt: new Date(Date.now() + 14 * 864e5).toISOString().slice(0, 10),
     clientName: c.client.name, clientEmail: c.client.email,
+    clientId: c.client.id || "",
+    depPaid: false, balPaid: false,
     subtotal: t.sub, vat: t.vat, vatPct: t.pct,
     items: [
-      { name: "Deposit: " + (c.money.depositPct) + "% of " + c.project.name, desc: "Required to start work, VAT inclusive", qty: 1, price: t.dep },
-      { name: "Balance: " + c.project.name, desc: "Due before digital files transfer, VAT inclusive", qty: 1, price: t.bal }
+      { name: c.project.name, desc: `Deposit ${c.money.depositPct}% — required to start work, VAT inclusive`, qty: 1, price: t.dep },
+      { name: c.project.name, desc: "Balance — due before digital files transfer, VAT inclusive", qty: 1, price: t.bal }
     ]
   };
   S.invoices.push(inv); store.save();
