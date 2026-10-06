@@ -17,6 +17,18 @@ function totals(c) {
 }
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[m]));
 
+function newFromTemplate(tpl) {
+  const c = blankContract();
+  if (tpl) {
+    c.project.scope = tpl.scope || ""; c.project.summary = tpl.summary || "";
+    c.project.options = tpl.options || ""; c.project.deliverables = (tpl.deliverables || []).slice();
+    c.duration.phases = JSON.parse(JSON.stringify(tpl.phases || []));
+    c.money.depositPct = tpl.depositPct; c.money.vatPct = tpl.vatPct;
+    c.pay.m1 = tpl.pay.m1 || S.settings.wm1; c.pay.m2 = tpl.pay.m2 || S.settings.wm2;
+    c.templateId = tpl.id; c.templateName = tpl.name;
+  } else { c.pay.m1 = S.settings.wm1; c.pay.m2 = S.settings.wm2; }
+  return c;
+}
 function blankContract() {
   return {
     id: uid(), ref: "CTR-MJB-" + new Date().getFullYear() + "-" + String(Math.floor(1000 + Math.random() * 9000)),
@@ -31,10 +43,29 @@ function blankContract() {
 }
 
 const store = {
-  data: { contracts: [], invoices: [], settings: { designer: "MrJamesBrand Ltd", email: "hello@mrjamesbrandltd.com", social: "@mrjamesbrand", wm1: "Western Union cash pickup", wm2: "World Remit transfer" } },
-  load() { try { const d = JSON.parse(localStorage.getItem(KEY)); if (d && d.contracts) this.data = Object.assign(this.data, d); } catch (e) {} },
+  data: { contracts: [], invoices: [], templates: [], settings: { designer: "MrJamesBrand Ltd", email: "hello@mrjamesbrandltd.com", social: "@mrjamesbrand", wm1: "Western Union cash pickup", wm2: "World Remit transfer" } },
+  load() {
+    try { const d = JSON.parse(localStorage.getItem(KEY)); if (d && d.contracts) this.data = Object.assign(this.data, d); } catch (e) {}
+    if (!Array.isArray(this.data.templates)) this.data.templates = [];
+    let seeded = false;
+    for (const s of defaultTemplates()) if (!this.data.templates.some((t) => t.id === s.id)) { this.data.templates.push(s); seeded = true; }
+    if (seeded) this.save();
+  },
   save() { localStorage.setItem(KEY, JSON.stringify(this.data)); }
 };
+/* Seeded service templates: one engine, many contract types. */
+function defaultTemplates() {
+  const P = (arr) => arr.map(([name, weeks]) => ({ name, weeks }));
+  return [
+    { id: "brand-identity", name: "Brand Identity", scope: "Full visual identity system", summary: "", options: "3 initial concepts, 2 revision rounds", deliverables: ["Logo suite (primary + secondary marks)", "Color palette", "Typography system", "Brand guidelines document", "Collateral starters"], phases: P([["Discovery & Research", 1], ["Concept Development", 2], ["Refinement", 1], ["Final Handover", 1]]), depositPct: 75, vatPct: 7.5, pay: { m1: "", m2: "" } },
+    { id: "logo-design", name: "Logo Design", scope: "Logo mark and lockups", summary: "", options: "3 initial concepts, 2 revision rounds", deliverables: ["Primary logo", "Secondary marks and lockups", "Mini usage guide"], phases: P([["Discovery", 1], ["Concepts", 1], ["Refinement", 1], ["Handover", 1]]), depositPct: 75, vatPct: 7.5, pay: { m1: "", m2: "" } },
+    { id: "web-design", name: "Web Design", scope: "Website design and build", summary: "", options: "2 design directions, 2 revision rounds", deliverables: ["Sitemap and wireframes", "UI design", "Website development", "CMS setup and launch"], phases: P([["Discovery", 1], ["Design", 2], ["Build", 3], ["Launch", 1]]), depositPct: 75, vatPct: 7.5, pay: { m1: "", m2: "" } },
+    { id: "consulting", name: "Consulting", scope: "Advisory engagement", summary: "", options: "Weekly advisory calls, written recommendations", deliverables: ["Audit report", "Strategy roadmap", "Advisory sessions"], phases: P([["Audit", 1], ["Strategy", 1], ["Advisory", 2]]), depositPct: 100, vatPct: 7.5, pay: { m1: "", m2: "" } },
+    { id: "training", name: "Training / Workshop", scope: "Team training delivery", summary: "", options: "Live sessions plus materials and recording", deliverables: ["Curriculum", "Live training sessions", "Materials and recording"], phases: P([["Preparation", 1], ["Delivery", 1], ["Follow-up", 1]]), depositPct: 100, vatPct: 7.5, pay: { m1: "", m2: "" } },
+    { id: "webinar-branding", name: "Webinar Branding", scope: "Webinar identity and launch assets", summary: "", options: "2 creative directions, 2 revision rounds", deliverables: ["Webinar title lockup and theme", "Slide deck design", "Promotional flyers and banners", "Social media announcement kit", "Workbook or handout design"], phases: P([["Discovery", 1], ["Design", 2], ["Refinement", 1], ["Handover", 1]]), depositPct: 75, vatPct: 7.5, pay: { m1: "", m2: "" } },
+    { id: "social-media-templates", name: "Social Media Templates", scope: "Editable social media template system", summary: "", options: "2 style directions, 2 revision rounds, editable source files included", deliverables: ["Feed post templates", "Story and reel cover templates", "Profile and highlight covers", "Caption and hashtag guide"], phases: P([["Discovery", 1], ["Design", 2], ["Refinement", 1], ["Handover", 1]]), depositPct: 75, vatPct: 7.5, pay: { m1: "", m2: "" } }
+  ];
+}
 store.load();
 const S = store.data;
 let route = { view: "dashboard", id: null };
@@ -233,14 +264,31 @@ function vContracts() {
     ${contractTable(S.contracts.slice().reverse())}`;
 }
 
+function vPicker() {
+  return `<p class="eyebrow">New contract</p><h1 class="page-title">Pick a <span class="hl">service</span></h1>
+    <p class="lede">Each service prefills deliverables, phases, deposit and VAT. Same engine, any offering.</p>
+    <div class="grid3">
+      ${S.templates.map((t) => `<button class="card" style="text-align:left;cursor:pointer" data-act="from-tpl" data-id="${t.id}">
+        <p class="eyebrow">${t.depositPct}% deposit · ${t.vatPct}% VAT</p>
+        <h3 class="mt">${esc(t.name)}</h3>
+        <p style="font-size:.85rem;color:var(--stone)">${t.deliverables.length} deliverables · ${t.phases.length} phases</p>
+      </button>`).join("")}
+      <button class="card" style="text-align:left;cursor:pointer" data-act="from-blank">
+        <p class="eyebrow">Custom</p><h3 class="mt">Blank contract</h3>
+        <p style="font-size:.85rem;color:var(--stone)">Start from scratch</p>
+      </button>
+    </div>`;
+}
+
 function vEditor() {
   const c = draft, t = totals(c);
-  return `<p class="eyebrow">Admin · ${esc(c.ref)} ${badge(c.status)}</p>
+  return `<p class="eyebrow">Admin · ${esc(c.ref)} ${badge(c.status)}${c.templateName ? ` · ${esc(c.templateName)}` : ""}</p>
     <h1 class="page-title">${c.id && S.contracts.find((x) => x.id === c.id) ? "Edit" : "New"} <span class="hl">contract</span></h1>
     <div class="toolbar no-print">
       <button class="btn btn-primary" data-act="save">Save</button>
       <button class="btn btn-ghost" data-act="send" ${c.status !== "DRAFT" ? "disabled" : ""}>Mark Sent</button>
       <button class="btn btn-ghost" data-act="preview">Preview &amp; Sign →</button>
+      <button class="btn btn-ghost" data-act="save-tpl">Save as template</button>
       <span class="spacer"></span><button class="btn" onclick="window.print()">Print / PDF</button>
     </div><p class="no-print" style="font-size:.8rem;color:var(--stone)">Tip: click any value inside the preview: every row and column edits inline.</p><div id="err"></div>
     <div class="editor"><div class="panel card no-print">
@@ -343,6 +391,10 @@ function vSettings() {
       <label class="f full">Default method one<textarea id="set-wm1">${esc(s.wm1)}</textarea></label>
       <label class="f full">Default method two<textarea id="set-wm2">${esc(s.wm2)}</textarea></label>
     </div><p class="mt"><button class="btn btn-primary" data-act="save-settings">Save settings</button></p></div>
+    <div class="card no-print mt" style="max-width:640px"><h3>Service templates</h3>
+      ${S.templates.map((t) => `<p style="display:flex;justify-content:space-between;align-items:center;gap:12px;border-bottom:1px solid var(--mist);padding:8px 0">
+        <span><strong>${esc(t.name)}</strong> <span style="color:var(--stone);font-size:.8rem">${t.depositPct}% deposit · ${t.deliverables.length} deliverables</span></span>
+        <button class="btn btn-ghost" data-act="del-tpl" data-id="${t.id}">Delete</button></p>`).join("")}</div>
     <div class="card no-print mt" style="max-width:640px"><h3>Official Accounts (locked)</h3>
       <p style="font-size:.85rem;color:var(--stone)">Printed on every invoice, identical each time. Matches the mrjamesbrand repo.</p>
       <table class="list mt"><tr><th>Bank</th><th>Name</th><th>Number</th></tr>
@@ -374,6 +426,7 @@ function render() {
   const app = $("#app");
   if (route.view === "dashboard") app.innerHTML = vDashboard();
   else if (route.view === "contracts") app.innerHTML = vContracts();
+  else if (route.view === "picker") app.innerHTML = vPicker();
   else if (route.view === "editor") { app.innerHTML = vEditor(); enableEd(); }
   else if (route.view === "document") { app.innerHTML = vDocument(route.id); padD = pad("pad-d"); padC = pad("pad-c"); }
   else if (route.view === "invoices") app.innerHTML = vInvoices();
@@ -405,7 +458,21 @@ document.addEventListener("click", (e) => {
   const nav = e.target.closest(".navlink"); if (nav) { route = { view: nav.dataset.view, id: null }; render(); return; }
   const b = e.target.closest("[data-act]"); if (!b) return;
   const act = b.dataset.act, id = b.dataset.id;
-  if (act === "new") { draft = blankContract(); draft.pay.m1 = S.settings.wm1; draft.pay.m2 = S.settings.wm2; route = { view: "editor", id: null }; render(); }
+  if (act === "new") { route = { view: "picker", id: null }; render(); }
+  else if (act === "from-blank") { draft = newFromTemplate(null); route = { view: "editor", id: null }; render(); }
+  else if (act === "from-tpl") { draft = newFromTemplate(S.templates.find((x) => x.id === id)); route = { view: "editor", id: null }; render(); }
+  else if (act === "save-tpl") {
+    if (!persistDraft()) return;
+    const name = prompt("Template name:", draft.templateName || draft.project.scope || "Custom service");
+    if (!name) return;
+    const snap = { id: name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || uid(), name,
+      scope: draft.project.scope, summary: draft.project.summary, options: draft.project.options,
+      deliverables: draft.project.deliverables.slice(), phases: JSON.parse(JSON.stringify(draft.duration.phases)),
+      depositPct: draft.money.depositPct, vatPct: totals(draft).pct, pay: { m1: draft.pay.m1, m2: draft.pay.m2 } };
+    const i = S.templates.findIndex((x) => x.id === snap.id);
+    if (i >= 0) S.templates[i] = snap; else S.templates.push(snap);
+    store.save(); toast(`Template "${name}" saved.`);
+  }
   else if (act === "open") { route = { view: "document", id }; render(); }
   else if (act === "edit") { const c = S.contracts.find((x) => x.id === id); draft = JSON.parse(JSON.stringify(c)); route = { view: "editor", id }; render(); }
   else if (act === "preview") { if (persistDraft(true)) { toast("Contract saved."); route = { view: "document", id: draft.id }; render(); } else window.scrollTo(0, 0); }
@@ -470,6 +537,10 @@ document.addEventListener("click", (e) => {
   }
   else if (act === "backup") { download(`contract-studio-backup-${todayISO()}.json`, JSON.stringify(store.data, null, 2)); toast("Backup downloaded."); }
   else if (act === "restore") { const f = $("#restore-file"); if (f) f.click(); }
+  else if (act === "del-tpl") {
+    const t = S.templates.find((x) => x.id === id);
+    if (t && confirm(`Delete template "${t.name}"?`)) { S.templates = S.templates.filter((x) => x.id !== id); store.save(); render(); }
+  }
 });
 
 function epText(el) { return (el.innerText || "").split(String.fromCharCode(160)).join(" ").trim(); }
