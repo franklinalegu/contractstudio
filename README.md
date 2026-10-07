@@ -89,6 +89,7 @@ Push `main`. The `pages.yml` workflow publishes this folder automatically.
 | `morning-start.bat` | Morning routine: server plus agenda popup |
 | `SECURITY_WORKLOG.md` | Security plan and progress log |
 | `GUIDE.md` | Refined operator and care manual |
+| `PRD.md` | Product requirements document for the studio |
 | `btn-test.mjs`, `roundtrip-test.mjs`, `lock-test.mjs`, `logo-test.mjs`, `audit-test.mjs` | Test suites, run with node |
 
 ## Tests
