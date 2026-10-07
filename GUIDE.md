@@ -30,7 +30,7 @@ The refined operator and care manual for daily studio work. For setup, deploymen
 ## 4. Invoices and money
 
 1. Contract invoices split deposit and balance automatically, VAT inclusive.
-2. Standalone invoices suit retainers and extras: add service lines, set VAT and discount percent, link a contract when one applies.
+2. Standalone invoices suit retainers and extras: add service lines, set VAT and discount percent, link a contract when one applies. Tick Remove VAT on any invoice that should carry none.
 3. Due date defaults to 14 days out. Overdue invoices surface on the dashboard.
 4. Outstanding and collected totals group by currency, so USD and NGN never merge into one misleading figure.
 5. Official studio accounts print on every invoice. Payment narration should quote the invoice reference.

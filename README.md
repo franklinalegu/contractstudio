@@ -16,6 +16,7 @@ Any static server works as well: `python -m http.server 8080` from this folder. 
 * **Sign off**: draw on pads for designer plus client, in the studio or via a signing file
 * **Share for signing**: a single `sign-REF.html` file the client opens on any device, signs, and returns as a short code you paste back
 * **Invoices**: raised from signed contracts or standalone, 7.5% VAT, USD or NGN, discount support, deposit against balance tracking, mark PAID
+* **VAT is optional**: tick Remove VAT on any contract or invoice to take it off. Totals and documents then read No VAT charged.
 * **Clients**: auto issued IDs such as `CLT-MJB-0001`, with billed and owed totals per client
 * **Service templates**: 19 prefilled offerings so a new contract starts from real deliverables, phases, deposit, and VAT
 * **Backup and restore**: the whole studio as one file, plain or password encrypted
@@ -50,7 +51,7 @@ Each tile prefills scope, deliverables, phases, payment options, deposit, and VA
 
 ## Money rules
 
-* Quote figures are before VAT. VAT applies on the subtotal, default 7.5%, adjustable per contract and per invoice.
+* Quote figures are before VAT. VAT defaults to 7.5%, stays adjustable per record, and can be removed per record with Remove VAT.
 * Deposit is 75% or 100% depending on service. Files release only after the balance clears. Rights transfer on final payment.
 * Every quote holds for 30 days from the document date. The dashboard flags quotes with 7 days or less remaining.
 * Invoices fall due 14 days after issue. Standalone invoices support a percentage discount plus VAT.

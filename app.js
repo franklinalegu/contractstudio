@@ -9,7 +9,7 @@ const money = (n, c) => new Intl.NumberFormat("en-NG", { style: "currency", curr
 /* Subtotal + VAT + deposit/balance. Old contracts without vatPct default to 7.5%. */
 function totals(c) {
   const sub = Math.round(Number(c.money.quote) || 0);
-  const pct = Number(c.money.vatPct == null ? 7.5 : c.money.vatPct) || 0;
+  const pct = c.money.vatExempt ? 0 : (Number(c.money.vatPct == null ? 7.5 : c.money.vatPct) || 0);
   const vat = Math.round(sub * pct / 100);
   const total = sub + vat;
   const dep = Math.round(total * (Number(c.money.depositPct) || 0) / 100);
@@ -35,7 +35,7 @@ function blankContract() {
     status: "DRAFT", createdAt: todayISO(),
     client: { name: "", business: "", industry: "", email: "", phone: "" },
     project: { name: "", scope: "", summary: "", deliverables: [""], options: "3 initial concepts, 2 revision rounds", revisions: "" },
-    money: { currency: "USD", quote: 0, depositPct: 75, vatPct: 7.5 },
+    money: { currency: "USD", quote: 0, depositPct: 75, vatPct: 7.5, vatExempt: false },
     pay: { m1: "", m2: "" },
     duration: { phases: [{ name: "Discovery & Research", weeks: 1 }, { name: "Concept Development", weeks: 2 }, { name: "Refinement", weeks: 1 }, { name: "Final Handover", weeks: 1 }] },
     sign: { designerName: store.data.settings.designer, designerSig: "", clientName: "", clientSig: "", date: "", paymentMethod: "", paymentDate: "", comments: "" }
@@ -182,7 +182,7 @@ function docHTML(c, ed) {
       <div class="doc-quote"><span>QUOTE</span><span${E("money.quote", "XXXX" + c.money.currency)}>${money(t.total, c.money.currency)}</span></div>
       <div class="doc-olive"><h4>Deliverables &amp; revisions</h4>
         <p><span${E("project.options", "Options & revisions statement")}>${esc(c.project.options)}</span>. Costs valid 30 days from document date.</p>
-        <p>Subtotal: <strong>${money(t.sub, c.money.currency)}</strong><br>Plus VAT (<span${E("money.vatPct", "7.5")}>${t.pct}</span>%): <strong>${money(t.vat, c.money.currency)}</strong></p>
+        <p>Subtotal: <strong>${money(t.sub, c.money.currency)}</strong><br>${t.pct > 0 ? `Plus VAT (<span${E("money.vatPct", "7.5")}>${t.pct}</span>%): <strong>${money(t.vat, c.money.currency)}</strong>` : `No VAT charged.`}</p>
         <h4>Payment Breakdown: <span${E("money.depositPct", "75")}>${c.money.depositPct}</span>% deposit, ${100 - c.money.depositPct}% before file delivery</h4>
         <p>Deposit (to start work): <strong>${money(t.dep, c.money.currency)}</strong><br>Balance (before files transfer): <strong>${money(t.bal, c.money.currency)}</strong></p></div>
       <div class="doc-foot"><span>MRJAMESBRAND LTD</span></div>
@@ -265,7 +265,7 @@ function invoiceHTML(inv) {
     <table class="doc-table mt"><tr><th>Item</th><th>Qty</th><th>Price</th><th>Amount</th></tr>
       ${inv.items.map((i) => `<tr><td><strong>${esc(i.name)}</strong><br>${esc(i.desc || "")}</td><td>${i.qty}</td><td>${money(i.price, inv.currency)}</td><td>${money(i.qty * i.price, inv.currency)}</td></tr>`).join("")}
     </table>
-    ${hasVat ? `<p style="text-align:right">Subtotal: ${money(vSub, inv.currency)}<br>${inv.disc > 0 ? `Discount (${inv.discPct}%): −${money(inv.disc, inv.currency)}<br>` : ""}VAT (${inv.vatPct}%): ${money(vVat, inv.currency)}</p>` : ""}
+    ${hasVat ? `<p style="text-align:right">Subtotal: ${money(vSub, inv.currency)}<br>${inv.disc > 0 ? `Discount (${inv.discPct}%): −${money(inv.disc, inv.currency)}<br>` : ""}${inv.vat > 0 ? `VAT (${inv.vatPct}%): ${money(vVat, inv.currency)}` : `No VAT charged.`}</p>` : ""}
     <div class="inv-total"><span>TOTAL</span><span>${money(invTotal(inv), inv.currency)}</span></div>
     ${inv.notes ? `<p class="mt"><strong>Notes:</strong> ${esc(inv.notes)}</p>` : ""}
     <div class="doc-beige"><h4>Pay To: Official Studio Accounts</h4>
@@ -483,7 +483,8 @@ function vEditor() {
       <h3 class="mt">Money</h3><div class="formgrid">
         <label class="f">Currency<select data-f="money.currency"><option ${c.money.currency === "USD" ? "selected" : ""}>USD</option><option ${c.money.currency === "NGN" ? "selected" : ""}>NGN</option></select></label>
         <label class="f">Quote (before VAT)<input type="number" min="0" data-f="money.quote" value="${c.money.quote}"></label>
-        <label class="f">VAT %<input type="number" min="0" max="100" step="0.5" data-f="money.vatPct" value="${t.pct}"></label>
+        <label class="f">VAT %<input type="number" min="0" max="100" step="0.5" data-f="money.vatPct" value="${t.pct}"${c.money.vatExempt ? " disabled" : ""}></label>
+        <label class="f">VAT<span style="display:flex;align-items:center;gap:10px;margin-top:6px;font-size:.9rem;font-weight:400;text-transform:none;letter-spacing:normal"><input type="checkbox" data-f="money.vatExempt"${c.money.vatExempt ? " checked" : ""} style="width:22px;height:22px">${c.money.vatExempt ? "Removed" : "Applied"}</span></label>
         <label class="f">Deposit<select data-f="money.depositPct">${[75, 100].includes(Number(c.money.depositPct)) ? "" : `<option value="${c.money.depositPct}" selected>${c.money.depositPct}% (legacy)</option>`}<option value="75"${Number(c.money.depositPct) === 75 ? " selected" : ""}>75%</option><option value="100"${Number(c.money.depositPct) === 100 ? " selected" : ""}>100%</option></select></label>
         <label class="f">Total (incl. VAT)<input id="totalfield" value="${money(t.total, c.money.currency)}" disabled></label>
         <label class="f">Balance<input id="balfield" value="${money(t.bal, c.money.currency)}" disabled></label>
@@ -562,7 +563,7 @@ function vInvoice(id) {
 /* ---------- standalone invoice builder ---------- */
 let draftInv = null;
 function blankInv() {
-  return { clientName: "", clientEmail: "", currency: "USD", vatPct: 7.5, discPct: 0,
+  return { clientName: "", clientEmail: "", currency: "USD", vatPct: 7.5, discPct: 0, noVat: false,
     dueAt: new Date(Date.now() + 14 * 864e5).toISOString().slice(0, 10),
     notes: "", contractId: "", items: [{ name: "", desc: "", qty: 1, price: 0 }] };
 }
@@ -570,7 +571,7 @@ function invTotals(d) {
   const sub = d.items.reduce((s, i) => s + (Number(i.qty) || 0) * (Number(i.price) || 0), 0);
   const dpct = Number(d.discPct) || 0, disc = Math.round(sub * dpct / 100);
   const nsub = sub - disc;
-  const pct = Number(d.vatPct) || 0, vat = Math.round(nsub * pct / 100);
+  const pct = d.noVat ? 0 : (Number(d.vatPct) || 0), vat = Math.round(nsub * pct / 100);
   return { sub, pct, vat, total: nsub + vat, disc, dpct };
 }
 function invTotal(i) {
@@ -583,7 +584,7 @@ function invTotalsHTML(d) {
   const row = "display:flex;justify-content:space-between;gap:16px;padding:6px 0;font-size:.9rem;";
   return `<div style="${row}"><span>Subtotal</span><span class="money">${money(t.sub, d.currency)}</span></div>
     ${t.dpct > 0 ? `<div style="${row}"><span>Discount (${t.dpct}%)</span><span class="money">−${money(t.disc, d.currency)}</span></div>` : ""}
-    <div style="${row}"><span>VAT (${t.pct}%)</span><span class="money">${money(t.vat, d.currency)}</span></div>
+    <div style="${row}"><span>${t.pct > 0 ? `VAT (${t.pct}%)` : `No VAT charged.`}</span><span class="money">${money(t.vat, d.currency)}</span></div>
     <div class="money" style="display:flex;justify-content:space-between;gap:16px;font-size:1.2rem;border-top:2px solid #000;padding-top:10px;margin-top:6px"><span>Total</span><span>${money(t.total, d.currency)}</span></div>`;
 }
 function vInvEditor() {
@@ -599,7 +600,8 @@ function vInvEditor() {
         <label class="f">Client name*<input data-if="clientName" value="${esc(d.clientName)}"></label>
         <label class="f">Client email<input data-if="clientEmail" value="${esc(d.clientEmail)}"></label>
         <label class="f">Currency<select data-if="currency"><option${d.currency === "USD" ? " selected" : ""}>USD</option><option${d.currency === "NGN" ? " selected" : ""}>NGN</option></select></label>
-        <label class="f">VAT %<input type="number" min="0" max="100" step="0.5" data-if="vatPct" value="${d.vatPct}"></label>
+        <label class="f">VAT %<input type="number" min="0" max="100" step="0.5" data-if="vatPct" value="${d.vatPct}"${d.noVat ? " disabled" : ""}></label>
+        <label class="f">VAT<span style="display:flex;align-items:center;gap:10px;margin-top:6px;font-size:.9rem;font-weight:400;text-transform:none;letter-spacing:normal"><input type="checkbox" data-if="noVat"${d.noVat ? " checked" : ""} style="width:22px;height:22px">Remove VAT</span></label>
         <label class="f">Discount %<input type="number" min="0" max="100" step="0.5" data-if="discPct" value="${d.discPct}"></label>
         <label class="f">Due date<input type="date" data-if="dueAt" value="${esc(d.dueAt)}"></label>
         <label class="f">Link contract (optional)<select data-if="contractId"><option value="">Standalone (no contract)</option>
@@ -632,7 +634,7 @@ function persistInv() {
     clientName: d.clientName, clientEmail: d.clientEmail, notes: d.notes,
     clientId: (linked && linked.client.id) || store.clientIdFor(d.clientName),
     depPaid: false, balPaid: false,
-    subtotal: t.sub, vat: t.vat, vatPct: t.pct, disc: t.disc, discPct: t.dpct,
+    subtotal: t.sub, vat: t.vat, vatPct: t.pct, disc: t.disc, discPct: t.dpct, noVat: !!d.noVat,
     items: lines.map((i) => ({ name: i.name, desc: i.desc, qty: Number(i.qty) || 1, price: Number(i.price) || 0 })) };
   S.invoices.push(inv); store.save();
   route = { view: "invoice", id: inv.id }; render(); toast("Invoice created.");
@@ -738,10 +740,11 @@ document.addEventListener("input", (e) => {
   if (route.view === "invoice-edit" && draftInv) {
     if (t.dataset.if) {
       const k = t.dataset.if;
-      draftInv[k] = (t.type === "number") ? Number(t.value) : t.value;
+      draftInv[k] = t.type === "checkbox" ? t.checked : ((t.type === "number") ? Number(t.value) : t.value);
+      if (k === "noVat") { const vi = document.querySelector('[data-if="vatPct"]'); if (vi) vi.disabled = draftInv.noVat; refreshInvTotals(); }
       if (k === "contractId" && t.value) {
         const c = S.contracts.find((x) => x.id === t.value);
-        if (c) { draftInv.clientName = c.client.name; draftInv.clientEmail = c.client.email; draftInv.currency = c.money.currency; draftInv.vatPct = totals(c).pct; render(); return; }
+        if (c) { draftInv.clientName = c.client.name; draftInv.clientEmail = c.client.email; draftInv.currency = c.money.currency; draftInv.vatPct = totals(c).pct; draftInv.noVat = !!c.money.vatExempt; render(); return; }
       }
       refreshInvTotals();
     } else if (t.dataset.ii !== undefined) {
@@ -764,7 +767,7 @@ document.addEventListener("input", (e) => {
     return;
   }
   if (route.view === "editor" && draft) {
-    if (t.dataset.f) { const num = t.type === "number" || t.dataset.f === "money.depositPct"; setPath(draft, t.dataset.f, num ? Number(t.value) : t.value); refreshPreviewEd(); }
+    if (t.dataset.f) { const k = t.dataset.f; setPath(draft, k, t.type === "checkbox" ? t.checked : ((t.type === "number" || k === "money.depositPct") ? Number(t.value) : t.value)); if (k === "money.vatExempt") { const vi = document.querySelector('[data-f="money.vatPct"]'); if (vi) vi.disabled = draft.money.vatExempt; } refreshPreviewEd(); }
     else if (t.dataset.d !== undefined) { draft.project.deliverables[Number(t.dataset.d)] = t.value; refreshPreviewEd(); }
     else if (t.dataset.pn !== undefined) { draft.duration.phases[Number(t.dataset.pn)].name = t.value; refreshPreviewEd(); }
     else if (t.dataset.pw !== undefined) { draft.duration.phases[Number(t.dataset.pw)].weeks = Number(t.value); refreshPreviewEd(); }
@@ -1269,7 +1272,7 @@ function raiseInvoice(contractId) {
     dueAt: new Date(Date.now() + 14 * 864e5).toISOString().slice(0, 10),
     clientName: c.client.name, clientEmail: c.client.email,
     clientId: c.client.id || "",
-    depPaid: false, balPaid: false,
+    depPaid: false, balPaid: false, noVat: !!c.money.vatExempt,
     subtotal: t.sub, vat: t.vat, vatPct: t.pct, disc: 0, discPct: 0,
     items: [
       { name: c.project.name, desc: `Deposit ${c.money.depositPct}% — required to start work, VAT inclusive`, qty: 1, price: t.dep },

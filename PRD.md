@@ -87,7 +87,7 @@ Design work was agreed in chat threads and scattered documents. Scope drifted, d
 
 ## 7. Money and legal rules
 
-1. Quotes are before VAT. VAT defaults to 7.5% and stays adjustable per record.
+1. Quotes are before VAT. VAT defaults to 7.5%, stays adjustable per record, and can be removed per record with a Remove VAT switch.
 2. Deposit is 75% or 100% by service. Work starts on deposit. Files release on balance. Rights transfer on final payment.
 3. Quotes hold for 30 days. Invoices fall due 14 days after issue.
 4. Fixed legal text covers deposits, securing, cancellation, suspension, fonts, ownership, trademark limits, and naming responsibility.
