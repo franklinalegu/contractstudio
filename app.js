@@ -43,12 +43,13 @@ function blankContract() {
 }
 
 const store = {
-  data: { contracts: [], invoices: [], templates: [], clients: [], clientSeq: 1, appliedCodes: {}, hiddenTemplates: [], settings: { designer: "MrJamesBrand Ltd", email: "hello@mrjamesbrandltd.com", social: "@mrjamesbrand", wm1: "Western Union cash pickup", wm2: "World Remit transfer", adminUser: "mrjamesbrandltd", lockHash: "" } },
+  data: { contracts: [], invoices: [], templates: [], clients: [], clientSeq: 1, appliedCodes: {}, hiddenTemplates: [], coupons: [], settings: { designer: "MrJamesBrand Ltd", email: "hello@mrjamesbrandltd.com", social: "@mrjamesbrand", wm1: "Western Union cash pickup", wm2: "World Remit transfer", adminUser: "mrjamesbrandltd", lockHash: "" } },
   load() {
     try { const d = JSON.parse(localStorage.getItem(KEY)); if (d && d.contracts) this.data = Object.assign(this.data, d); } catch (e) {}
     this.data.settings = Object.assign({ adminUser: "mrjamesbrandltd", lockHash: "" }, this.data.settings);
     if (!this.data.appliedCodes || typeof this.data.appliedCodes !== "object") this.data.appliedCodes = {};
     if (!Array.isArray(this.data.hiddenTemplates)) this.data.hiddenTemplates = [];
+    if (!Array.isArray(this.data.coupons)) this.data.coupons = [];
     if (!Array.isArray(this.data.templates)) this.data.templates = [];
     let seeded = false;
     for (const s of defaultTemplates()) if (!this.data.templates.some((t) => t.id === s.id)) { this.data.templates.push(s); seeded = true; }
@@ -265,7 +266,7 @@ function invoiceHTML(inv) {
     <table class="doc-table mt"><tr><th>Item</th><th>Qty</th><th>Price</th><th>Amount</th></tr>
       ${inv.items.map((i) => `<tr><td><strong>${esc(i.name)}</strong><br>${esc(i.desc || "")}</td><td>${i.qty}</td><td>${money(i.price, inv.currency)}</td><td>${money(i.qty * i.price, inv.currency)}</td></tr>`).join("")}
     </table>
-    ${hasVat ? `<p style="text-align:right">Subtotal: ${money(vSub, inv.currency)}<br>${inv.disc > 0 ? `Discount (${inv.discPct}%): −${money(inv.disc, inv.currency)}<br>` : ""}${inv.vat > 0 ? `VAT (${inv.vatPct}%): ${money(vVat, inv.currency)}` : `No VAT charged.`}</p>` : ""}
+    ${hasVat ? `<p style="text-align:right">Subtotal: ${money(vSub, inv.currency)}<br>${inv.disc > 0 ? `Discount (${inv.discPct}%): −${money(inv.disc, inv.currency)}<br>` : ""}${inv.coupon && inv.coupon.amount > 0 ? `Coupon ${esc(inv.coupon.code)}: −${money(inv.coupon.amount, inv.currency)}<br>` : ""}${inv.vat > 0 ? `VAT (${inv.vatPct}%): ${money(vVat, inv.currency)}` : `No VAT charged.`}</p>` : ""}
     <div class="inv-total"><span>TOTAL</span><span>${money(invTotal(inv), inv.currency)}</span></div>
     ${inv.notes ? `<p class="mt"><strong>Notes:</strong> ${esc(inv.notes)}</p>` : ""}
     <div class="doc-beige"><h4>Pay To: Official Studio Accounts</h4>
@@ -557,13 +558,15 @@ function vInvoice(id) {
       <div class="formgrid">
         <label class="f">Deposit<span style="display:flex;align-items:center;gap:10px;margin-top:6px;font-size:.9rem;font-weight:400;text-transform:none;letter-spacing:normal"><input type="checkbox" data-pay="depPaid"${i.depPaid ? " checked" : ""} style="width:22px;height:22px">${i.depPaid ? "Received" : "Awaiting"}</span></label>
         <label class="f">Balance<span style="display:flex;align-items:center;gap:10px;margin-top:6px;font-size:.9rem;font-weight:400;text-transform:none;letter-spacing:normal"><input type="checkbox" data-pay="balPaid"${i.balPaid ? " checked" : ""} style="width:22px;height:22px">${i.balPaid ? "Received" : "Awaiting"}</span></label>
-      </div></div>${invoiceHTML(i)}`;
+      </div></div>${i.status !== "PAID" ? `<div class="card no-print" style="max-width:640px;margin-bottom:16px"><h3>Coupon</h3>
+      ${i.coupon ? `<p>Coupon <strong>${esc(i.coupon.code)}</strong> (−${money(i.coupon.amount, i.currency)}) <button class="btn btn-ghost" data-act="remove-coupon" data-id="${i.id}">Remove</button></p>`
+        : `<div class="deliverable-row"><input id="coupon-code" placeholder="Coupon code" style="text-transform:uppercase"><button data-act="apply-coupon" data-id="${i.id}">Apply</button></div><div id="coupon-err"></div>`}</div>` : ""}${invoiceHTML(i)}`;
 }
 
 /* ---------- standalone invoice builder ---------- */
 let draftInv = null;
 function blankInv() {
-  return { clientName: "", clientEmail: "", currency: "USD", vatPct: 7.5, discPct: 0, noVat: false,
+  return { clientName: "", clientEmail: "", currency: "USD", vatPct: 7.5, discPct: 0, noVat: false, coupon: null,
     dueAt: new Date(Date.now() + 14 * 864e5).toISOString().slice(0, 10),
     notes: "", contractId: "", items: [{ name: "", desc: "", qty: 1, price: 0 }] };
 }
@@ -571,19 +574,38 @@ function invTotals(d) {
   const sub = d.items.reduce((s, i) => s + (Number(i.qty) || 0) * (Number(i.price) || 0), 0);
   const dpct = Number(d.discPct) || 0, disc = Math.round(sub * dpct / 100);
   const nsub = sub - disc;
-  const pct = d.noVat ? 0 : (Number(d.vatPct) || 0), vat = Math.round(nsub * pct / 100);
-  return { sub, pct, vat, total: nsub + vat, disc, dpct };
+  /* coupon lands after the invoice discount and before VAT */
+  let couponAmt = 0, couponCode = "";
+  if (d.coupon && d.coupon.code) {
+    couponCode = d.coupon.code;
+    couponAmt = d.coupon.kind === "flat" ? Math.min(Number(d.coupon.value) || 0, nsub) : Math.round(nsub * (Number(d.coupon.value) || 0) / 100);
+  }
+  const base = nsub - couponAmt;
+  const pct = d.noVat ? 0 : (Number(d.vatPct) || 0), vat = Math.round(base * pct / 100);
+  return { sub, pct, vat, total: base + vat, disc, dpct, couponAmt, couponCode };
 }
 function invTotal(i) {
   const s = i.items.reduce((a, l) => a + l.qty * l.price, 0);
   const sub = i.subtotal !== undefined ? i.subtotal : s;
-  return sub - (i.disc || 0) + (i.vat || 0);
+  return sub - (i.disc || 0) - ((i.coupon && i.coupon.amount) || 0) + (i.vat || 0);
+}
+/* validate a typed code against the coupon book */
+function resolveCoupon(raw) {
+  const code = String(raw || "").trim().toUpperCase();
+  if (!code) return { ok: false, msg: "Type a coupon code first." };
+  const c = S.coupons.find((x) => String(x.code).toUpperCase() === code);
+  if (!c) return { ok: false, msg: `Coupon ${code} does not exist.` };
+  if (!c.active) return { ok: false, msg: `Coupon ${code} is switched off.` };
+  if (!(Number(c.value) > 0)) return { ok: false, msg: `Coupon ${code} has no value.` };
+  if (c.kind === "percent" && Number(c.value) > 100) return { ok: false, msg: `Coupon ${code} is over 100 percent.` };
+  return { ok: true, coupon: { code: c.code, kind: c.kind, value: Number(c.value) } };
 }
 function invTotalsHTML(d) {
   const t = invTotals(d);
   const row = "display:flex;justify-content:space-between;gap:16px;padding:6px 0;font-size:.9rem;";
   return `<div style="${row}"><span>Subtotal</span><span class="money">${money(t.sub, d.currency)}</span></div>
     ${t.dpct > 0 ? `<div style="${row}"><span>Discount (${t.dpct}%)</span><span class="money">−${money(t.disc, d.currency)}</span></div>` : ""}
+    ${t.couponAmt > 0 ? `<div style="${row}"><span>Coupon ${esc(t.couponCode)}</span><span class="money">−${money(t.couponAmt, d.currency)}</span></div>` : ""}
     <div style="${row}"><span>${t.pct > 0 ? `VAT (${t.pct}%)` : `No VAT charged.`}</span><span class="money">${money(t.vat, d.currency)}</span></div>
     <div class="money" style="display:flex;justify-content:space-between;gap:16px;font-size:1.2rem;border-top:2px solid #000;padding-top:10px;margin-top:6px"><span>Total</span><span>${money(t.total, d.currency)}</span></div>`;
 }
@@ -618,6 +640,9 @@ function vInvEditor() {
           <button data-act="del-ii" data-i="${i}" aria-label="Remove line">×</button></div>`).join("")}
       </div>
       <p class="mt"><button class="btn btn-ghost" data-act="add-ii">+ Add line</button></p>
+      <h3 class="mt">Coupon</h3>
+      ${d.coupon ? `<p>Coupon <strong>${esc(d.coupon.code)}</strong> (−${money(invTotals(d).couponAmt, d.currency)}) <button class="btn btn-ghost" data-act="remove-coupon-draft">Remove</button></p>`
+        : `<div class="deliverable-row"><input id="coupon-code" placeholder="Coupon code" style="text-transform:uppercase"><button data-act="apply-coupon-draft">Apply</button></div><div id="coupon-err"></div>`}
       <div class="mt" id="invtotals" style="max-width:320px;margin-left:auto">${invTotalsHTML(d)}</div>
     </div>`;
 }
@@ -635,6 +660,7 @@ function persistInv() {
     clientId: (linked && linked.client.id) || store.clientIdFor(d.clientName),
     depPaid: false, balPaid: false,
     subtotal: t.sub, vat: t.vat, vatPct: t.pct, disc: t.disc, discPct: t.dpct, noVat: !!d.noVat,
+    coupon: d.coupon && t.couponAmt > 0 ? { code: d.coupon.code, kind: d.coupon.kind, value: d.coupon.value, amount: t.couponAmt } : null,
     items: lines.map((i) => ({ name: i.name, desc: i.desc, qty: Number(i.qty) || 1, price: Number(i.price) || 0 })) };
   S.invoices.push(inv); store.save();
   route = { view: "invoice", id: inv.id }; render(); toast("Invoice created.");
@@ -672,6 +698,18 @@ function vSettings() {
       <button class="btn btn-ghost" data-act="backup">Plain backup</button>
       <button class="btn btn-ghost" data-act="restore">Restore backup</button>
       <input type="file" id="restore-file" accept="application/json,.json" style="display:none"></p></div>
+    <div class="card no-print mt" style="max-width:640px"><h3>Coupons</h3>
+      <p style="font-size:.85rem;color:var(--stone)">Reusable price cuts for invoices. Percent cuts scale with the bill. Flat cuts read in the invoice currency.</p>
+      ${S.coupons.length ? S.coupons.map((c) => `<p style="display:flex;justify-content:space-between;align-items:center;gap:12px;border-bottom:1px solid var(--mist);padding:8px 0">
+        <span><strong>${esc(c.code)}</strong> <span style="color:var(--stone);font-size:.8rem">${c.kind === "flat" ? "Flat" : c.value + "%"}${c.kind === "flat" ? " " + c.value : ""} · ${c.active ? "On" : "Off"}</span></span>
+        <span class="rowactions"><button class="btn btn-ghost" data-act="toggle-coupon" data-id="${esc(c.code)}">${c.active ? "Off" : "On"}</button><button class="btn btn-danger" data-act="del-coupon" data-id="${esc(c.code)}">Delete</button></span></p>`).join("")
+        : `<p class="mt" style="font-size:.85rem;color:var(--stone)">No coupons yet.</p>`}
+      <div class="formgrid mt">
+        <label class="f">Code<input id="cp-code" placeholder="FESTIVE10" style="text-transform:uppercase"></label>
+        <label class="f">Kind<select id="cp-kind"><option value="percent">Percent %</option><option value="flat">Flat amount</option></select></label>
+        <label class="f">Value<input id="cp-value" type="number" min="0" placeholder="10"></label>
+      </div>
+      <p class="mt"><button class="btn btn-primary" data-act="add-coupon">Add coupon</button></p></div>
     <div class="card no-print mt" style="max-width:640px"><h3>Admin login ${S.settings.lockHash ? "(on)" : "(off)"}</h3>
       <p style="font-size:.85rem;color:var(--stone)">Password-gate this studio on shared devices. Stored as a hash, never plain text.</p>
       <div class="formgrid mt">
@@ -872,6 +910,31 @@ document.addEventListener("click", async (e) => {
   else if (act === "add-ii") { if (draftInv) { draftInv.items.push({ name: "", desc: "", qty: 1, price: 0 }); render(); } }
   else if (act === "del-ii") { if (draftInv && draftInv.items.length > 1) { draftInv.items.splice(Number(b.dataset.i), 1); render(); } }
   else if (act === "save-inv") { if (draftInv) persistInv(); }
+  else if (act === "apply-coupon-draft") {
+    if (!draftInv) return;
+    const inp = $("#coupon-code"); const r = resolveCoupon(inp && inp.value);
+    if (!r.ok) { const er = $("#coupon-err"); if (er) er.innerHTML = `<div class="alert">${esc(r.msg)}</div>`; else alert(r.msg); return; }
+    draftInv.coupon = r.coupon; render(); toast(`Coupon ${r.coupon.code} applied.`);
+  }
+  else if (act === "remove-coupon-draft") { if (draftInv) { draftInv.coupon = null; render(); } }
+  else if (act === "apply-coupon") {
+    const i = S.invoices.find((x) => x.id === id); if (!i || i.status === "PAID") return;
+    const inp = $("#coupon-code"); const r = resolveCoupon(inp && inp.value);
+    if (!r.ok) { alert(r.msg); return; }
+    const base = (i.subtotal !== undefined ? i.subtotal : i.items.reduce((s, l) => s + l.qty * l.price, 0)) - (i.disc || 0);
+    const amt = r.coupon.kind === "flat" ? Math.min(r.coupon.value, base) : Math.round(base * r.coupon.value / 100);
+    if (!(amt > 0)) { alert("This coupon changes nothing on this invoice."); return; }
+    i.coupon = { code: r.coupon.code, kind: r.coupon.kind, value: r.coupon.value, amount: amt };
+    i.vat = Math.round((base - amt) * (i.noVat ? 0 : (Number(i.vatPct) || 0)) / 100);
+    store.save(); render(); toast(`Coupon ${r.coupon.code} applied.`);
+  }
+  else if (act === "remove-coupon") {
+    const i = S.invoices.find((x) => x.id === id); if (!i || !i.coupon) return;
+    i.coupon = null;
+    const base = (i.subtotal !== undefined ? i.subtotal : i.items.reduce((s, l) => s + l.qty * l.price, 0)) - (i.disc || 0);
+    i.vat = Math.round(base * (i.noVat ? 0 : (Number(i.vatPct) || 0)) / 100);
+    store.save(); render(); toast("Coupon removed.");
+  }
   else if (act === "paid") { const i = S.invoices.find((x) => x.id === id); i.status = "PAID"; store.save(); render(); }
   else if (act === "add-d") { draft.project.deliverables.push(""); render(); }
   else if (act === "del-d") { if (draft.project.deliverables.length > 1) draft.project.deliverables.splice(Number(b.dataset.i), 1); render(); }
@@ -905,6 +968,21 @@ document.addEventListener("click", async (e) => {
   else if (act === "del-tpl") {
     const t = S.templates.find((x) => x.id === id);
     if (t && confirm(`Delete template "${t.name}"?`)) { S.templates = S.templates.filter((x) => x.id !== id); store.save(); render(); }
+  }
+  else if (act === "add-coupon") {
+    const code = ($("#cp-code") ? $("#cp-code").value : "").trim().toUpperCase();
+    const kind = $("#cp-kind") ? $("#cp-kind").value : "percent";
+    const value = $("#cp-value") ? Number($("#cp-value").value) : 0;
+    if (!code) { alert("Coupon code is required."); return; }
+    if (S.coupons.some((c) => c.code === code)) { alert(`Coupon ${code} already exists.`); return; }
+    if (!(value > 0)) { alert("Coupon value must be above zero."); return; }
+    if (kind === "percent" && value > 100) { alert("Percent coupons cap at 100."); return; }
+    S.coupons.push({ code, kind, value, active: true }); store.save(); render(); toast(`Coupon ${code} added.`);
+  }
+  else if (act === "toggle-coupon") { const c = S.coupons.find((x) => x.code === id); if (c) { c.active = !c.active; store.save(); render(); } }
+  else if (act === "del-coupon") {
+    const c = S.coupons.find((x) => x.code === id);
+    if (c && confirm(`Delete coupon ${c.code}? Invoices that used it keep their reduction.`)) { S.coupons = S.coupons.filter((x) => x !== c); store.save(); render(); }
   }
   else if (act === "new-service") {
     draftService = blankService();
@@ -1272,7 +1350,7 @@ function raiseInvoice(contractId) {
     dueAt: new Date(Date.now() + 14 * 864e5).toISOString().slice(0, 10),
     clientName: c.client.name, clientEmail: c.client.email,
     clientId: c.client.id || "",
-    depPaid: false, balPaid: false, noVat: !!c.money.vatExempt,
+    depPaid: false, balPaid: false, noVat: !!c.money.vatExempt, coupon: null,
     subtotal: t.sub, vat: t.vat, vatPct: t.pct, disc: 0, discPct: 0,
     items: [
       { name: c.project.name, desc: `Deposit ${c.money.depositPct}% — required to start work, VAT inclusive`, qty: 1, price: t.dep },

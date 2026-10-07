@@ -14,6 +14,8 @@ assert.ok(src.includes('data-act="clone"'), "clone button missing");
 for (const s of ["vServices", "vServiceEdit", "blankService", "hiddenTemplates", "isBuiltinTpl", "New service"]) assert.ok(src.includes(s), "missing services: " + s);
 // VAT is optional per contract and per invoice
 for (const s of ["vatExempt", "noVat", "Remove VAT", "No VAT charged."]) assert.ok(src.includes(s), "missing VAT option: " + s);
+// coupon system: book, resolve, apply at creation and after
+for (const s of ["coupons", "resolveCoupon", "apply-coupon", "apply-coupon-draft", "remove-coupon", "Coupon"]) assert.ok(src.includes(s), "missing coupon: " + s);
 // validity countdown intact
 for (const s of ["validityDays", "validityBadge", "30 -", "EXPIRED", "D LEFT"]) assert.ok(src.includes(s), "missing validity: " + s);
 // validity math: 30-day window

@@ -55,6 +55,7 @@ Design work was agreed in chat threads and scattered documents. Scope drifted, d
 2. Build standalone invoices with free service lines, VAT percent, and discount percent, optionally linked to a contract.
 3. Track deposit received and balance received separately. Display PART until both land, then PAID.
 4. Total outstanding and collected grouped by currency, never merged across currencies.
+5. Apply reusable coupons as percent or flat cuts at invoice creation or on unpaid invoices, landing after discount and before VAT and printing on the invoice.
 5. Print the official studio accounts plus the invoice reference as payment narration on every invoice.
 
 ### Clients
@@ -111,7 +112,7 @@ Design work was agreed in chat threads and scattered documents. Scope drifted, d
 ## 10. Data model
 
 1. **Contract.** Reference, status, creation date, client block, project block, money block, payment methods, phases, signature block, template origin.
-2. **Invoice.** Reference, linked contract or standalone, status, currency, dates, client snapshot, line items, subtotal, discount, VAT, deposit tick, balance tick.
+2. **Invoice.** Reference, linked contract or standalone, status, currency, dates, client snapshot, line items, subtotal, discount, coupon snapshot, VAT, deposit tick, balance tick.
 3. **Client.** Stable ID, name, business, email, phone.
 4. **Template.** ID, name, scope, options, deliverables, phases, deposit, VAT, payment defaults.
 5. **Settings.** Studio identity, contacts, defaults, logo, admin username, lock hash.
