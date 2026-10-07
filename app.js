@@ -15,7 +15,7 @@ function totals(c) {
   const dep = Math.round(total * (Number(c.money.depositPct) || 0) / 100);
   return { sub, pct, vat, total, dep, bal: total - dep };
 }
-const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[m]));
+const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m]));
 
 function newFromTemplate(tpl) {
   const c = blankContract();
@@ -461,7 +461,7 @@ function vEditor() {
       <button class="btn btn-ghost" data-act="send" ${c.status !== "DRAFT" ? "disabled" : ""}>Mark Sent</button>
       <button class="btn btn-ghost" data-act="preview">Preview &amp; Sign →</button>
       <button class="btn btn-ghost" data-act="save-tpl">Save as template</button>
-      <span class="spacer"></span><button class="btn" onclick="window.print()">Print / PDF</button>
+      <span class="spacer"></span><button class="btn" data-act="print">Print / PDF</button>
     </div><p class="no-print" style="font-size:.8rem;color:var(--stone)">Tip: click any value inside the preview: every row and column edits inline.</p><div id="err"></div>
     <div class="editor"><div class="panel card no-print">
       <h3>Client</h3><div class="formgrid">
@@ -514,7 +514,7 @@ function vDocument(id) {
       <button class="btn btn-ghost" data-act="clone" data-id="${c.id}">Clone</button>
       <button class="btn btn-ghost" data-act="share" data-id="${c.id}">Share for signing</button>
       <button class="btn btn-ghost" data-act="apply-code">Apply client code</button>
-      <span class="spacer"></span><button class="btn" onclick="window.print()">Print / PDF</button>
+      <span class="spacer"></span><button class="btn" data-act="print">Print / PDF</button>
     </div>
     ${c.status !== "SIGNED" ? `<div class="card no-print"><h3>Sign off</h3>
       <div class="formgrid mt">
@@ -552,7 +552,7 @@ function vInvoice(id) {
   return `<p class="eyebrow">Invoice · ${esc(i.ref)} ${invBadge(i)}</p>
     <div class="toolbar no-print">
       ${i.status !== "PAID" ? `<button class="btn btn-lime" data-act="paid" data-id="${i.id}">Mark PAID</button>` : ""}
-      <span class="spacer"></span><button class="btn" onclick="window.print()">Print / PDF</button>
+      <span class="spacer"></span><button class="btn" data-act="print">Print / PDF</button>
     </div>
     <div class="card no-print" style="max-width:640px;margin-bottom:16px"><h3>Payments received</h3>
       <div class="formgrid">
@@ -852,7 +852,8 @@ document.addEventListener("click", async (e) => {
   const nav = e.target.closest(".navlink"); if (nav) { route = { view: nav.dataset.view, id: null }; render(); return; }
   const b = e.target.closest("[data-act]"); if (!b) return;
   const act = b.dataset.act, id = b.dataset.id;
-  if (act === "new") { route = { view: "picker", id: null }; render(); }
+  if (act === "print") { window.print(); }
+  else if (act === "new") { route = { view: "picker", id: null }; render(); }
   else if (act === "from-blank") { draft = newFromTemplate(null); route = { view: "editor", id: null }; render(); }
   else if (act === "from-tpl") { draft = newFromTemplate(S.templates.find((x) => x.id === id)); route = { view: "editor", id: null }; render(); }
   else if (act === "save-tpl") {
@@ -920,6 +921,7 @@ document.addEventListener("click", async (e) => {
       const code = raw.trim();
       const p = JSON.parse(decodeURIComponent(escape(atob(code))));
       if (!p || p.contractId !== c.id || !p.clientSig) { alert("This code does not match the open contract."); return; }
+      if (!/^data:image\/png;base64,/.test(p.clientSig)) { alert("This code carries an invalid signature."); return; }
       if (p.ref && p.ref !== c.ref) { alert(`This code is for ${p.ref}, but the open contract is ${c.ref}.`); return; }
       const prev = (S.appliedCodes || {})[c.id];
       if (prev) {

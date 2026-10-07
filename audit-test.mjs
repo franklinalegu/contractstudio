@@ -2,6 +2,7 @@ import { readFileSync } from "fs";
 import assert from "assert";
 const src = readFileSync(new URL("./app.js", import.meta.url), "utf8");
 const readme = readFileSync(new URL("./README.md", import.meta.url), "utf8");
+const html = readFileSync(new URL("./index.html", import.meta.url), "utf8");
 // return-code stamp: ref + issuedAt in payload, ref check + reuse warning on apply
 for (const s of ["appliedCodes", "CREF", "ISSUED", "ref:CREF", "issuedAt:ISSUED", "already applied"]) assert.ok(src.includes(s), "missing code-reuse: " + s);
 assert.ok(/p\.ref && p\.ref !== c\.ref/.test(src), "must reject cross-contract codes");
@@ -18,6 +19,9 @@ for (const s of ["vatExempt", "noVat", "Remove VAT", "No VAT charged."]) assert.
 for (const s of ["coupons", "resolveCoupon", "apply-coupon", "apply-coupon-draft", "remove-coupon", "Coupon"]) assert.ok(src.includes(s), "missing coupon: " + s);
 // single use plus expiry: usage ledger, guards, form field
 for (const s of ["stampCouponUse", "freeCouponUse", "usedAt", "invoiceRef", "cp-expires", "already used", "expired on"]) assert.ok(src.includes(s), "missing single use: " + s);
+// round 2 hardening: signature intake validation, full escaping, CSP, no inline handlers
+for (const s of ["data:image\\/png;base64,", "&#39;", "Content-Security-Policy", 'data-act="print"']) assert.ok(src.includes(s) || html.includes(s), "missing hardening: " + s);
+assert.ok(!src.includes('onclick="'), "no inline handler attributes allowed");
 // coupons own view, not a settings card
 assert.ok(src.includes("vCoupons"), "missing coupons view");
 assert.equal(src.split("<h3>Coupons</h3>").length - 1, 1, "coupon manager must render once");

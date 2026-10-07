@@ -29,3 +29,8 @@
 - All 5 threats done in app.js (v6): no seeded hash + forced first-run setup; 10-min idle + tab-hidden auto-lock; AES-GCM encrypted backup (PBKDF2) with plain-export confirm; return codes stamped with ref + issue date, reuse warns; share-file PII confirm + README retention note.
 - Features 1–4 were already shipped (clone, PART tracking, validity countdown, clients view) — covered by tests.
 - 5 suites green. Fresh Desktop contract-studio.zip rebuilt.
+
+## Round 2 hardening
+- Stored XSS audit: every `${}` interpolation checked. Static legal text, numeric totals, generated IDs, and pre escaped settings are safe by construction.
+- Real hole closed: crafted return codes could plant a hostile signature into an unescaped image tag. Intake now accepts PNG data URLs only.
+- Depth: escaping now covers single quotes, print buttons moved off inline handlers, and a Content Security Policy ships in `index.html`.
