@@ -598,7 +598,21 @@ function resolveCoupon(raw) {
   if (!c.active) return { ok: false, msg: `Coupon ${code} is switched off.` };
   if (!(Number(c.value) > 0)) return { ok: false, msg: `Coupon ${code} has no value.` };
   if (c.kind === "percent" && Number(c.value) > 100) return { ok: false, msg: `Coupon ${code} is over 100 percent.` };
+  if (c.expires && c.expires < todayISO()) return { ok: false, msg: `Coupon ${code} expired on ${c.expires}.` };
+  if (c.used && c.used.invoiceRef) return { ok: false, msg: `Coupon ${code} was already used on invoice ${c.used.invoiceRef}.` };
   return { ok: true, coupon: { code: c.code, kind: c.kind, value: Number(c.value) } };
+}
+/* single use ledger: who spent the coupon, on which service and invoice */
+function stampCouponUse(inv, cp) {
+  const c = S.coupons.find((x) => x.code === cp.code); if (!c) return;
+  const linked = inv.contractId ? S.contracts.find((x) => x.id === inv.contractId) : null;
+  const service = linked ? (linked.templateName || linked.project.name || linked.project.scope || "") : ((inv.items[0] && inv.items[0].name) || "");
+  c.used = { clientId: inv.clientId || "", clientName: inv.clientName || "", service, invoiceRef: inv.ref, usedAt: todayISO() };
+}
+function freeCouponUse(inv) {
+  if (!inv.coupon) return;
+  const c = S.coupons.find((x) => x.code === inv.coupon.code);
+  if (c && c.used && c.used.invoiceRef === inv.ref) c.used = null;
 }
 function invTotalsHTML(d) {
   const t = invTotals(d);
@@ -660,8 +674,14 @@ function persistInv() {
     clientId: (linked && linked.client.id) || store.clientIdFor(d.clientName),
     depPaid: false, balPaid: false,
     subtotal: t.sub, vat: t.vat, vatPct: t.pct, disc: t.disc, discPct: t.dpct, noVat: !!d.noVat,
-    coupon: d.coupon && t.couponAmt > 0 ? { code: d.coupon.code, kind: d.coupon.kind, value: d.coupon.value, amount: t.couponAmt } : null,
+    coupon: null,
     items: lines.map((i) => ({ name: i.name, desc: i.desc, qty: Number(i.qty) || 1, price: Number(i.price) || 0 })) };
+  if (d.coupon) {
+    const live = resolveCoupon(d.coupon.code);
+    if (!live.ok || !(t.couponAmt > 0)) { const er = $("#err"); const msg = live.ok ? "This coupon changes nothing on this invoice." : live.msg; if (er) er.innerHTML = `<div class="alert">${esc(msg)}</div>`; else alert(msg); return false; }
+    inv.coupon = { code: live.coupon.code, kind: live.coupon.kind, value: live.coupon.value, amount: t.couponAmt };
+    stampCouponUse(inv, live.coupon);
+  }
   S.invoices.push(inv); store.save();
   route = { view: "invoice", id: inv.id }; render(); toast("Invoice created.");
   return true;
@@ -672,13 +692,14 @@ function couponManagerHTML() {
   return `<h3>Coupons</h3>
       <p style="font-size:.85rem;color:var(--stone)">Reusable price cuts for invoices. Percent cuts scale with the bill. Flat cuts read in the invoice currency.</p>
       ${S.coupons.length ? S.coupons.map((c) => `<p style="display:flex;justify-content:space-between;align-items:center;gap:12px;border-bottom:1px solid var(--mist);padding:8px 0">
-        <span><strong>${esc(c.code)}</strong> <span style="color:var(--stone);font-size:.8rem">${c.kind === "flat" ? "Flat" : c.value + "%"}${c.kind === "flat" ? " " + c.value : ""} · ${c.active ? "On" : "Off"}</span></span>
-        <span class="rowactions"><button class="btn btn-ghost" data-act="toggle-coupon" data-id="${esc(c.code)}">${c.active ? "Off" : "On"}</button><button class="btn btn-danger" data-act="del-coupon" data-id="${esc(c.code)}">Delete</button></span></p>`).join("")
+        <span><strong>${esc(c.code)}</strong> <span style="color:var(--stone);font-size:.8rem">${c.kind === "flat" ? "Flat" : c.value + "%"}${c.kind === "flat" ? " " + c.value : ""} · ${c.used && c.used.invoiceRef ? `Used by ${esc(c.used.clientName)}${c.used.clientId ? ` (${esc(c.used.clientId)})` : ""}${c.used.service ? ` on ${esc(c.used.service)}` : ""} · ${esc(c.used.invoiceRef)}` : (c.active ? "On" : "Off")}${c.expires && !(c.used && c.used.invoiceRef) ? ` · expires ${esc(c.expires)}` : ""}</span></span>
+        <span class="rowactions">${c.used && c.used.invoiceRef ? "" : `<button class="btn btn-ghost" data-act="toggle-coupon" data-id="${esc(c.code)}">${c.active ? "Off" : "On"}</button>`}<button class="btn btn-danger" data-act="del-coupon" data-id="${esc(c.code)}">Delete</button></span></p>`).join("")
         : `<p class="mt" style="font-size:.85rem;color:var(--stone)">No coupons yet.</p>`}
       <div class="formgrid mt">
         <label class="f">Code<input id="cp-code" placeholder="FESTIVE10" style="text-transform:uppercase"></label>
         <label class="f">Kind<select id="cp-kind"><option value="percent">Percent %</option><option value="flat">Flat amount</option></select></label>
         <label class="f">Value<input id="cp-value" type="number" min="0" placeholder="10"></label>
+        <label class="f">Expiry (optional)<input id="cp-expires" type="date"></label>
       </div>
       <p class="mt"><button class="btn btn-primary" data-act="add-coupon">Add coupon</button></p>`;
 }
@@ -935,11 +956,13 @@ document.addEventListener("click", async (e) => {
     const amt = r.coupon.kind === "flat" ? Math.min(r.coupon.value, base) : Math.round(base * r.coupon.value / 100);
     if (!(amt > 0)) { alert("This coupon changes nothing on this invoice."); return; }
     i.coupon = { code: r.coupon.code, kind: r.coupon.kind, value: r.coupon.value, amount: amt };
+    stampCouponUse(i, r.coupon);
     i.vat = Math.round((base - amt) * (i.noVat ? 0 : (Number(i.vatPct) || 0)) / 100);
     store.save(); render(); toast(`Coupon ${r.coupon.code} applied.`);
   }
   else if (act === "remove-coupon") {
     const i = S.invoices.find((x) => x.id === id); if (!i || !i.coupon) return;
+    freeCouponUse(i);
     i.coupon = null;
     const base = (i.subtotal !== undefined ? i.subtotal : i.items.reduce((s, l) => s + l.qty * l.price, 0)) - (i.disc || 0);
     i.vat = Math.round(base * (i.noVat ? 0 : (Number(i.vatPct) || 0)) / 100);
@@ -983,13 +1006,14 @@ document.addEventListener("click", async (e) => {
     const code = ($("#cp-code") ? $("#cp-code").value : "").trim().toUpperCase();
     const kind = $("#cp-kind") ? $("#cp-kind").value : "percent";
     const value = $("#cp-value") ? Number($("#cp-value").value) : 0;
+    const expires = $("#cp-expires") ? $("#cp-expires").value : "";
     if (!code) { alert("Coupon code is required."); return; }
     if (S.coupons.some((c) => c.code === code)) { alert(`Coupon ${code} already exists.`); return; }
     if (!(value > 0)) { alert("Coupon value must be above zero."); return; }
     if (kind === "percent" && value > 100) { alert("Percent coupons cap at 100."); return; }
-    S.coupons.push({ code, kind, value, active: true }); store.save(); render(); toast(`Coupon ${code} added.`);
+    S.coupons.push({ code, kind, value, active: true, expires: expires || "", used: null }); store.save(); render(); toast(`Coupon ${code} added.`);
   }
-  else if (act === "toggle-coupon") { const c = S.coupons.find((x) => x.code === id); if (c) { c.active = !c.active; store.save(); render(); } }
+  else if (act === "toggle-coupon") { const c = S.coupons.find((x) => x.code === id); if (!c || (c.used && c.used.invoiceRef)) return; c.active = !c.active; store.save(); render(); }
   else if (act === "del-coupon") {
     const c = S.coupons.find((x) => x.code === id);
     if (c && confirm(`Delete coupon ${c.code}? Invoices that used it keep their reduction.`)) { S.coupons = S.coupons.filter((x) => x !== c); store.save(); render(); }

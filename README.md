@@ -56,7 +56,7 @@ Each tile prefills scope, deliverables, phases, payment options, deposit, and VA
 * Every quote holds for 30 days from the document date. The dashboard flags quotes with 7 days or less remaining.
 * Invoices fall due 14 days after issue. Standalone invoices support a percentage discount plus VAT.
 * Part payment shows as PART until deposit and balance are both received, at which point the invoice flips to PAID.
-* Coupons live in the Coupons view as percent or flat cuts. Apply a code while creating an invoice or on any unpaid invoice. The cut lands after discount and before VAT, and prints on the invoice.
+* Coupons live in the Coupons view as percent or flat cuts, each for single use with an optional expiry date. Every use records client plus service. Apply a code while creating an invoice or on any unpaid invoice. The cut lands after discount and before VAT, and prints on the invoice.
 
 ## Security model
 

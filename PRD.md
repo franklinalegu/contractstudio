@@ -55,7 +55,7 @@ Design work was agreed in chat threads and scattered documents. Scope drifted, d
 2. Build standalone invoices with free service lines, VAT percent, and discount percent, optionally linked to a contract.
 3. Track deposit received and balance received separately. Display PART until both land, then PAID.
 4. Total outstanding and collected grouped by currency, never merged across currencies.
-5. Apply reusable coupons as percent or flat cuts at invoice creation or on unpaid invoices, landing after discount and before VAT and printing on the invoice.
+5. Apply reusable coupons as percent or flat cuts at invoice creation or on unpaid invoices, landing after discount and before VAT and printing on the invoice. Each coupon carries single use plus an optional expiry date, and each use records client plus service plus invoice.
 5. Print the official studio accounts plus the invoice reference as payment narration on every invoice.
 
 ### Clients
@@ -117,6 +117,7 @@ Design work was agreed in chat threads and scattered documents. Scope drifted, d
 4. **Template.** ID, name, scope, options, deliverables, phases, deposit, VAT, payment defaults.
 5. **Settings.** Studio identity, contacts, defaults, logo, admin username, lock hash.
 6. **Applied codes.** Last return code per contract for reuse detection.
+7. **Coupon.** Code, kind, value, active flag, optional expiry date, single use record with client plus service plus invoice.
 
 ## 11. Acceptance criteria
 

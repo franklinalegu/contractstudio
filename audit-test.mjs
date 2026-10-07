@@ -16,6 +16,8 @@ for (const s of ["vServices", "vServiceEdit", "blankService", "hiddenTemplates",
 for (const s of ["vatExempt", "noVat", "Remove VAT", "No VAT charged."]) assert.ok(src.includes(s), "missing VAT option: " + s);
 // coupon system: book, resolve, apply at creation and after
 for (const s of ["coupons", "resolveCoupon", "apply-coupon", "apply-coupon-draft", "remove-coupon", "Coupon"]) assert.ok(src.includes(s), "missing coupon: " + s);
+// single use plus expiry: usage ledger, guards, form field
+for (const s of ["stampCouponUse", "freeCouponUse", "usedAt", "invoiceRef", "cp-expires", "already used", "expired on"]) assert.ok(src.includes(s), "missing single use: " + s);
 // coupons own view, not a settings card
 assert.ok(src.includes("vCoupons"), "missing coupons view");
 assert.equal(src.split("<h3>Coupons</h3>").length - 1, 1, "coupon manager must render once");

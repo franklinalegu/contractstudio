@@ -31,7 +31,7 @@ The refined operator and care manual for daily studio work. For setup, deploymen
 
 1. Contract invoices split deposit and balance automatically, VAT inclusive.
 2. Standalone invoices suit retainers and extras: add service lines, set VAT and discount percent, link a contract when one applies. Tick Remove VAT on any invoice that should carry none. Type a coupon code to cut the bill by percent or flat amount.
-3. Coupons are created in the Coupons view with a code, a kind, and a value. A coupon also applies after creation from the Coupon card on any unpaid invoice. Deleting a coupon leaves past invoices untouched.
+3. Coupons are created in the Coupons view with a code, a kind, a value, and an optional expiry date. Each coupon works once. Spending one records client ID plus name plus service plus invoice. Removing it from that same invoice frees it again. Deleting a coupon leaves past invoices untouched.
 3. Due date defaults to 14 days out. Overdue invoices surface on the dashboard.
 4. Outstanding and collected totals group by currency, so USD and NGN never merge into one misleading figure.
 5. Official studio accounts print on every invoice. Payment narration should quote the invoice reference.
