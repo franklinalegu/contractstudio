@@ -80,6 +80,10 @@ Push `main`. The `pages.yml` workflow publishes this folder automatically.
 2. DNS: `CNAME contracts` pointing to `<user>.github.io`. Then Pages, then Custom domain: `contracts.mrjamesbrandltd.com`. HTTPS is enforced automatically.
 3. Open the live URL once and create the admin password on the first run screen.
 
+## Website
+
+The main studio website lives at https://github.com/franklinalegu/mrjamesbrand and embeds this studio at its contracts route from `apps/web/public/studio`. That folder is a mirror only. Change code here, then sync it from the website repo root with `node scripts/sync-contract-studio.mjs` before committing there.
+
 ## Files
 
 | File | Purpose |
