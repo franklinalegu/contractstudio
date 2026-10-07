@@ -734,6 +734,10 @@ function vSettings() {
       <table class="list mt"><tr><th>Bank</th><th>Name</th><th>Number</th></tr>
         <tr><td>${OFFICIAL.zenith.bank}</td><td>${OFFICIAL.zenith.name}</td><td class="money">${OFFICIAL.zenith.number}</td></tr>
         <tr><td>${OFFICIAL.kuda.bank}</td><td>${OFFICIAL.kuda.name}</td><td class="money">${OFFICIAL.kuda.number}</td></tr></table></div>
+    <div class="card no-print mt" style="max-width:640px"><h3>Arithmetic check</h3>
+      <p style="font-size:.85rem;color:var(--stone)">Recomputes every invoice total from its lines. Runs on its own after each restore.</p>
+      <div id="verify-out"></div>
+      <p class="mt"><button class="btn btn-ghost" data-act="verify-sums">Run check</button></p></div>
     <div class="card no-print mt" style="max-width:640px"><h3>Backup</h3>
       <p style="font-size:.85rem;color:var(--stone)">All contracts, invoices and settings live in this browser. Encrypted backup is recommended — plain JSON contains client PII in readable form.</p>
       <p class="mt"><button class="btn btn-primary" data-act="backup-enc">Download encrypted backup</button>
@@ -981,6 +985,14 @@ document.addEventListener("click", async (e) => {
     S.settings.social = $("#set-social").value; S.settings.wm1 = $("#set-wm1").value; S.settings.wm2 = $("#set-wm2").value;
     if ($("#set-adminuser")) S.settings.adminUser = $("#set-adminuser").value.trim() || "mrjamesbrandltd";
     store.save(); alert("Settings saved."); route = { view: "dashboard", id: null }; render();
+  }
+  else if (act === "verify-sums") {
+    const r = verifyArithmetic();
+    const box = $("#verify-out");
+    const msg = r.issues.length
+      ? `<div class="alert">${r.issues.length} mismatch${r.issues.length > 1 ? "es" : ""} in ${r.invoices} invoices:<br>${r.issues.slice(0, 5).map((x) => `${esc(x.ref)} · ${esc(x.field)}: stored ${esc(String(x.stored))}, recomputed ${esc(String(x.computed))}`).join("<br>")}</div>`
+      : `<p class="mt" style="font-size:.9rem">✓ ${r.invoices} invoice${r.invoices === 1 ? "" : "s"} checked, all arithmetic correct.</p>`;
+    if (box) box.innerHTML = msg; else alert(r.issues.length ? "Arithmetic mismatches found." : "All arithmetic correct.");
   }
   else if (act === "backup") {
     if (!confirm("Plain backup contains client names, contacts and signatures in readable form. Download anyway? (Encrypted backup is recommended.)")) return;
@@ -1250,11 +1262,15 @@ document.addEventListener("change", (e) => {
           const b = JSON.parse(plain);
           if (!b || !Array.isArray(b.contracts) || !b.settings) throw new Error("bad");
           store.data = Object.assign(store.data, b); store.save(); draft = null;
+          const chk = verifyArithmetic();
+          if (chk.issues.length) alert(`Backup restored, but ${chk.issues.length} stored total${chk.issues.length > 1 ? "s fail" : " fails"} recomputation. First: ${chk.issues[0].ref} ${chk.issues[0].field}.`);
           toast("Encrypted backup restored."); route = { view: "dashboard", id: null }; render();
           return;
         }
         if (!d || !Array.isArray(d.contracts) || !d.settings) throw new Error("bad");
         store.data = Object.assign(store.data, d); store.save(); draft = null;
+        const chk2 = verifyArithmetic();
+        if (chk2.issues.length) alert(`Backup restored, but ${chk2.issues.length} stored total${chk2.issues.length > 1 ? "s fail" : " fails"} recomputation. First: ${chk2.issues[0].ref} ${chk2.issues[0].field}.`);
         toast("Backup restored."); route = { view: "dashboard", id: null }; render();
       } catch (_) { alert("Invalid backup file."); }
     };
@@ -1284,6 +1300,26 @@ async function decBackup(pw, env) {
   const key = await backupKey(pw, b64d(env.salt));
   const pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv: b64d(env.iv) }, key, b64d(env.data));
   return new TextDecoder().decode(pt);
+}
+/* Arithmetic proof: recompute every stored invoice total from its lines.
+   Contracts need no check: their totals compute live from source fields. */
+function verifyArithmetic() {
+  const issues = [];
+  for (const i of S.invoices) {
+    const sub = i.items.reduce((s, l) => s + (Number(l.qty) || 0) * (Number(l.price) || 0), 0);
+    if (i.subtotal !== undefined && sub !== i.subtotal) issues.push({ ref: i.ref, field: "subtotal", stored: i.subtotal, computed: sub });
+    const disc = Math.round(sub * (Number(i.discPct) || 0) / 100);
+    if (disc !== (i.disc || 0)) issues.push({ ref: i.ref, field: "discount", stored: i.disc, computed: disc });
+    let couponAmt = 0;
+    if (i.coupon && i.coupon.code) {
+      couponAmt = i.coupon.kind === "flat" ? Math.min(Number(i.coupon.value) || 0, sub - disc) : Math.round((sub - disc) * (Number(i.coupon.value) || 0) / 100);
+      if (couponAmt !== i.coupon.amount) issues.push({ ref: i.ref, field: "coupon", stored: i.coupon.amount, computed: couponAmt });
+    }
+    const pct = i.noVat ? 0 : (Number(i.vatPct) || 0);
+    const vat = Math.round((sub - disc - couponAmt) * pct / 100);
+    if (vat !== (i.vat || 0)) issues.push({ ref: i.ref, field: "VAT", stored: i.vat, computed: vat });
+  }
+  return { invoices: S.invoices.length, issues };
 }
 /* Self-contained signing file: static contract + client pad + return-code generator. */
 function buildSignFile(c) {

@@ -25,6 +25,10 @@ assert.ok(!src.includes('onclick="'), "no inline handler attributes allowed");
 // coupons own view, not a settings card
 assert.ok(src.includes("vCoupons"), "missing coupons view");
 assert.equal(src.split("<h3>Coupons</h3>").length - 1, 1, "coupon manager must render once");
+// arithmetic proof: verifier, manual card, restore hooks, login gate on all views
+for (const s of ["verifyArithmetic", "verify-sums", "Arithmetic check"]) assert.ok(src.includes(s), "missing verifier: " + s);
+assert.ok((src.match(/verifyArithmetic\(\)/g) || []).length >= 3, "verifier must run on both restores");
+assert.ok(/if \(isLocked\(\)\)/.test(src), "all views must sit behind login");
 // validity countdown intact
 for (const s of ["validityDays", "validityBadge", "30 -", "EXPIRED", "D LEFT"]) assert.ok(src.includes(s), "missing validity: " + s);
 // validity math: 30-day window

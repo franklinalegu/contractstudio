@@ -56,7 +56,7 @@ The refined operator and care manual for daily studio work. For setup, deploymen
 2. Name the file by date on download and keep at least two generations, for example this month plus last month.
 3. Restore accepts both formats. Plain files restore at once. Encrypted files ask for the backup password first.
 4. Plain export exists for inspection and migration, and it always asks for confirmation because the contents are readable.
-5. After restore, glance at counts on the dashboard before continuing work.
+5. After restore, glance at counts on the dashboard before continuing work. The studio recomputes invoice arithmetic on its own and warns when a figure fails.
 
 ## 8. Lock management
 

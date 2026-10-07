@@ -66,6 +66,7 @@ Each tile prefills scope, deliverables, phases, payment options, deposit, and VA
 * **Return codes.** Each signing file stamps its contract reference plus issue date into the code. Pasting a code from a different contract is rejected. Pasting a code that was already applied raises a warning before anything is replaced.
 * **Sharing care.** Exporting a signing file asks for confirmation first, since the file carries client PII. Send it direct to the client only, never to a group.
 * **Hardened rendering.** Client supplied codes are validated on intake, all output is escaped, inline handlers are gone, and a Content Security Policy ships with the page.
+* **Arithmetic proof.** Settings holds a check that recomputes every invoice total from its lines. It also runs on its own after each restore and warns when a stored figure fails.
 
 ## Data, backup, and retention
 
