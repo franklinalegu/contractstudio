@@ -10,6 +10,9 @@ assert.ok(src.includes('"presentations-profile"'), "retired id must be filtered"
 assert.ok(!src.includes('name: "Presentations & Company Profile"'), "combined tile must be gone");
 // clone keeps working
 assert.ok(src.includes('data-act="clone"'), "clone button missing");
+// dashboard: attention strip, onboarding, pipeline, collected, no hardcoded USD
+for (const s of ["Needs attention", "Get started in 3 steps", "All clear", "draft ·", "sent ·", "signed", "collected", "new-inv"]) assert.ok(src.includes(s), "missing dashboard: " + s);
+assert.ok(!src.includes('money(owed, "USD")'), "outstanding must not hardcode USD");
 // validity countdown intact
 for (const s of ["validityDays", "validityBadge", "30 -", "EXPIRED", "D LEFT"]) assert.ok(src.includes(s), "missing validity: " + s);
 // validity math: 30-day window

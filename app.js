@@ -301,20 +301,37 @@ function nav() { $$(".navlink").forEach((b) => b.classList.toggle("active", b.da
 
 function vDashboard() {
   const cs = S.contracts, inv = S.invoices;
-  const signed = cs.filter((c) => c.status === "SIGNED").length;
-  const owed = inv.filter((i) => i.status !== "PAID").reduce((s, i) => s + invTotal(i), 0);
+  const isEmpty = !cs.length && !inv.length;
+  const st = (s) => cs.filter((c) => c.status === s).length;
+  const sums = (list) => { const m = {}; list.forEach((i) => { m[i.currency] = (m[i.currency] || 0) + invTotal(i); }); return m; };
+  const fmtSums = (m) => { const e = Object.entries(m); return e.length ? e.map(([c, v]) => money(v, c)).join(" · ") : "—"; };
+  const open = inv.filter((i) => i.status !== "PAID"), paid = inv.filter((i) => i.status === "PAID");
+  /* action-needed rows: awaiting signature, quotes expiring ≤7d, overdue invoices */
+  const rows = [];
+  cs.filter((c) => c.status === "SENT").slice(0, 3).forEach((c) => rows.push({ t: `<strong>${esc(c.ref)}</strong> — awaiting client signature`, act: "open", id: c.id }));
+  cs.filter((c) => c.status !== "SIGNED" && validityDays(c) >= 0 && validityDays(c) <= 7).slice(0, 3).forEach((c) => rows.push({ t: `<strong>${esc(c.ref)}</strong> — quote expires in ${validityDays(c)}d`, act: "open", id: c.id }));
+  open.filter((i) => i.dueAt && i.dueAt < todayISO()).slice(0, 3).forEach((i) => rows.push({ t: `<strong>${esc(i.ref)}</strong> — overdue since ${esc(i.dueAt)}`, act: "open-inv", id: i.id }));
+  const attention = rows.slice(0, 5);
+  const focus = isEmpty
+    ? `<div class="card"><h3>Get started in 3 steps</h3>
+      <p class="mt">✓ 1. Admin password — done.</p>
+      <p>2. Create your first contract <button class="btn btn-lime" data-act="new">+ New Contract</button></p>
+      <p>3. Keep an <button class="btn btn-ghost" data-act="backup-enc">encrypted backup</button> once saved.</p></div>`
+    : attention.length
+    ? `<div class="card" style="border-left:4px solid var(--warn,#b7791f)"><h3>Needs attention (${attention.length})</h3>
+      ${attention.map((r) => `<p style="display:flex;justify-content:space-between;align-items:center;gap:12px;border-bottom:1px solid var(--mist);padding:8px 0"><span>${r.t}</span><button class="btn btn-ghost" data-act="${r.act}" data-id="${r.id}">Open</button></p>`).join("")}</div>`
+    : `<div class="card"><h3>All clear ✓</h3><p style="font-size:.85rem;color:var(--stone)">Nothing awaiting signature, no quotes expiring, no overdue invoices.</p></div>`;
   return `<div id="glow" class="no-print" aria-hidden="true"></div>
     <p class="eyebrow">Contract Studio</p>
-    <h1 class="page-title">Prepare &amp; <span class="hl">sign contracts.</span></h1>
-    <p class="lede">Generate design contracts, get them signed, and raise invoices. All in the MRJAMESBRAND style.</p>
-    <div class="grid3">
-      <div class="card"><p class="eyebrow">Contracts</p><h2 style="font-size:2rem">${cs.length}</h2><p>${signed} signed</p></div>
-      <div class="card"><p class="eyebrow">Invoices</p><h2 style="font-size:2rem">${inv.length}</h2><p>${money(owed, "USD")} outstanding</p></div>
-      <div class="card"><p class="eyebrow">Create</p><h2 style="font-size:1.2rem">New contract</h2>
-        <p class="mt"><button class="btn btn-lime" data-act="new">+ New Contract</button></p></div>
+    <h1 class="page-title" style="font-size:1.7rem;margin:0 0 16px">Prepare &amp; <span class="hl">sign contracts.</span></h1>
+    ${focus}
+    <div class="grid3 mt">
+      <div class="card"><p class="eyebrow">Contracts</p><h2 style="font-size:2rem">${cs.length}</h2><p>${st("DRAFT")} draft · ${st("SENT")} sent · ${st("SIGNED")} signed</p></div>
+      <div class="card"><p class="eyebrow">Invoices</p><h2 style="font-size:2rem">${inv.length}</h2><p>${fmtSums(sums(open))} outstanding<br>${fmtSums(sums(paid))} collected</p></div>
+      ${isEmpty ? "" : `<div class="card"><p class="eyebrow">Create</p><h2 style="font-size:1.2rem">New</h2>
+        <p class="mt"><button class="btn btn-lime" data-act="new">+ Contract</button> <button class="btn btn-ghost" data-act="new-inv">+ Invoice</button></p></div>`}
     </div>
-    <h3 class="mt" style="margin:24px 0 12px">Recent contracts</h3>
-    ${contractTable(cs.slice(-5).reverse())}`;
+    ${isEmpty ? "" : `<h3 class="mt" style="margin:24px 0 12px">Recent contracts</h3>${contractTable(cs.slice(-5).reverse())}`}`;
 }
 
 function contractTable(cs) {
