@@ -4,7 +4,7 @@ The refined operator and care manual for daily studio work. For setup, deploymen
 
 ## 1. First run
 
-1. Open the studio. The first screen asks for an admin username plus password, minimum 4 characters.
+1. Open the studio. The first screen asks for an admin username plus password, minimum 8 characters.
 2. The studio unlocks immediately after creation. Later visits ask for login.
 3. The unlock dies with the tab. Closing the tab always asks for login again. Ten quiet minutes lock it too.
 

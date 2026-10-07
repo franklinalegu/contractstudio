@@ -13,6 +13,7 @@ has(`[data-act='lock']`);
 for (const a of [`data-act="new-service"`, `data-act="edit-service"`, `data-act="save-service"`, `data-act="cancel-service"`, `data-act="del-service"`, `data-act="toggle-service"`, `data-act="add-sd"`, `data-act="add-sp"`]) has(a);
 for (const a of [`data-view="services"`]) assert.ok(html.includes(a), "missing nav: " + a);
 for (const a of [`data-view="coupons"`]) assert.ok(html.includes(a), "missing nav: " + a);
+assert.ok(html.includes("noindex"), "login page must hide from crawlers");
 // clone still creates fresh draft
 has(`n.status = "DRAFT"`);
 has(`n.sign = { designerName`);

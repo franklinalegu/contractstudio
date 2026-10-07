@@ -60,8 +60,8 @@ Each tile prefills scope, deliverables, phases, payment options, deposit, and VA
 
 ## Security model
 
-* **First run setup.** No password ships with the studio. The first screen forces creation of an admin username plus password. The password is stored only as a salted SHA 256 hash, never as plain text.
-* **Locking.** Unlock lasts for the browser tab only. Closing the tab always asks for login again. Ten minutes without input locks the studio automatically.
+* **First run setup.** No password ships with the studio. The first screen forces creation of an admin username plus password of 8 characters or more. The password is stored only as a salted SHA 256 hash, never as plain text.
+* **Locking.** Unlock lasts for the browser tab only. Closing the tab always asks for login again. Ten minutes without input locks the studio automatically. Five wrong tries trigger a growing wait that survives reloads, so bots cannot guess fast. The page also hides from search crawlers.
 * **Encrypted backups.** Recommended for every backup. Protected by a password using PBKDF2 key derivation plus AES GCM 256 bit encryption. A wrong password cannot open the file. Plain JSON export stays available but asks for explicit confirmation first, since it contains readable client PII.
 * **Return codes.** Each signing file stamps its contract reference plus issue date into the code. Pasting a code from a different contract is rejected. Pasting a code that was already applied raises a warning before anything is replaced.
 * **Sharing care.** Exporting a signing file asks for confirmation first, since the file carries client PII. Send it direct to the client only, never to a group.

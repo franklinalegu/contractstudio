@@ -988,7 +988,7 @@ document.addEventListener("click", async (e) => {
   }
   else if (act === "backup-enc") {
     const a = prompt("Set a backup password (give it to whoever restores this file):");
-    if (!a || a.length < 4) { if (a !== null) alert("Backup password needs at least 4 characters."); return; }
+    if (!a || a.length < 8) { if (a !== null) alert("Backup password needs at least 8 characters."); return; }
     const b = prompt("Confirm backup password:");
     if (a !== b) { alert("Passwords do not match."); return; }
     encBackup(a, JSON.stringify(store.data)).then((env) => {
@@ -1104,7 +1104,7 @@ document.addEventListener("click", async (e) => {
   }
   else if (act === "save-lock") {
     const a = $("#set-pass").value, b2 = $("#set-pass2").value;
-    if (!a || a.length < 4) { alert("Password needs at least 4 characters."); return; }
+    if (!a || a.length < 8) { alert("Password needs at least 8 characters."); return; }
     if (a !== b2) { alert("Passwords do not match."); return; }
     S.settings.lockHash = await sha(a); store.save();
     $("#set-pass").value = ""; $("#set-pass2").value = "";
@@ -1155,10 +1155,19 @@ async function sha(s) {
   } catch (e) { let h = 5381; const str = "mjb:" + s; for (let i = 0; i < str.length; i++) h = (((h << 5) + h + str.charCodeAt(i)) | 0); return "dj2:" + (h >>> 0).toString(16); }
 }
 async function tryUnlock() {
+  let a = { n: 0, until: 0 };
+  try { a = Object.assign(a, JSON.parse(localStorage.getItem("mjb-lock-attempts"))); } catch (e) {}
+  const now = Date.now();
+  if (now < a.until) { const er = $("#lockerr"); if (er) er.innerHTML = `<div class="alert">Too many tries. Wait ${Math.ceil((a.until - now) / 1000)}s.</div>`; return; }
   const u = $("#lockuser").value.trim().toLowerCase(), v = $("#lockpass").value;
   if (u === String(S.settings.adminUser || "").toLowerCase() && (await sha(v)) === S.settings.lockHash) {
+    try { localStorage.setItem("mjb-lock-attempts", JSON.stringify({ n: 0, until: 0 })); } catch (e) {}
     sessionStorage.setItem("mjb-unlocked", "1"); poke(); render(); toast("Welcome back.");
-  } else { const er = $("#lockerr"); if (er) er.innerHTML = `<div class="alert">Wrong username or password.</div>`; }
+  } else {
+    a.n++; a.until = a.n >= 5 ? now + Math.min(30000 * Math.pow(2, a.n - 5), 900000) : 0;
+    try { localStorage.setItem("mjb-lock-attempts", JSON.stringify(a)); } catch (e) {}
+    const er = $("#lockerr"); if (er) er.innerHTML = `<div class="alert">Wrong username or password.${a.until > now ? ` Locked ${Math.ceil((a.until - now) / 1000)}s.` : ""}</div>`;
+  }
 }
 function vSetup() {
   return `<div style="min-height:80vh;display:flex;align-items:center;justify-content:center">
@@ -1175,7 +1184,7 @@ function vSetup() {
 async function trySetup() {
   const u = $("#lockuser").value.trim() || "mrjamesbrandltd", a = $("#lockpass").value, b = $("#lockpass2").value;
   const er = $("#lockerr");
-  if (!a || a.length < 4) { if (er) er.innerHTML = `<div class="alert">Password needs at least 4 characters.</div>`; return; }
+  if (!a || a.length < 8) { if (er) er.innerHTML = `<div class="alert">Password needs at least 8 characters.</div>`; return; }
   if (a !== b) { if (er) er.innerHTML = `<div class="alert">Passwords do not match.</div>`; return; }
   S.settings.adminUser = u; S.settings.lockHash = await sha(a); store.save();
   sessionStorage.setItem("mjb-unlocked", "1"); poke(); render(); toast("Password created.");

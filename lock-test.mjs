@@ -3,6 +3,10 @@ import assert from "assert";
 const src = readFileSync(new URL("./app.js", import.meta.url), "utf8");
 // 1. no seeded hash ships
 assert.ok(!src.includes("7b81f654e58ca14746e750df6a268d1f5a8fee8524e1bffdef7ddf12f71a3c95"), "seeded hash still present");
+// 4. brute force throttle survives reloads, passwords min 8
+assert.ok(src.includes("mjb-lock-attempts"), "missing attempt store");
+assert.ok(/n >= 5/.test(src), "lockout must start after 5 tries");
+assert.ok(!src.includes("length < 4"), "no 4 char minimum may remain");
 assert.ok(src.includes('lockHash: ""'), "default lockHash must be empty");
 // 2. first-run setup forces a fresh password
 for (const s of ["needsSetup", "vSetup", "trySetup", "First run", "Create password"]) assert.ok(src.includes(s), "missing setup: " + s);
