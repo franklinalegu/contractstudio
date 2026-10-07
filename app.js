@@ -43,11 +43,12 @@ function blankContract() {
 }
 
 const store = {
-  data: { contracts: [], invoices: [], templates: [], clients: [], clientSeq: 1, appliedCodes: {}, settings: { designer: "MrJamesBrand Ltd", email: "hello@mrjamesbrandltd.com", social: "@mrjamesbrand", wm1: "Western Union cash pickup", wm2: "World Remit transfer", adminUser: "mrjamesbrandltd", lockHash: "" } },
+  data: { contracts: [], invoices: [], templates: [], clients: [], clientSeq: 1, appliedCodes: {}, hiddenTemplates: [], settings: { designer: "MrJamesBrand Ltd", email: "hello@mrjamesbrandltd.com", social: "@mrjamesbrand", wm1: "Western Union cash pickup", wm2: "World Remit transfer", adminUser: "mrjamesbrandltd", lockHash: "" } },
   load() {
     try { const d = JSON.parse(localStorage.getItem(KEY)); if (d && d.contracts) this.data = Object.assign(this.data, d); } catch (e) {}
     this.data.settings = Object.assign({ adminUser: "mrjamesbrandltd", lockHash: "" }, this.data.settings);
     if (!this.data.appliedCodes || typeof this.data.appliedCodes !== "object") this.data.appliedCodes = {};
+    if (!Array.isArray(this.data.hiddenTemplates)) this.data.hiddenTemplates = [];
     if (!Array.isArray(this.data.templates)) this.data.templates = [];
     let seeded = false;
     for (const s of defaultTemplates()) if (!this.data.templates.some((t) => t.id === s.id)) { this.data.templates.push(s); seeded = true; }
@@ -387,10 +388,58 @@ function vClientEdit() {
     <p class="mt" style="font-size:.85rem;color:var(--stone)">Saving updates this client everywhere: their record plus all matching contracts and invoices.</p></div>`;
 }
 
+/* Services module: the picker tiles, manageable in app. */
+const isBuiltinTpl = (id) => defaultTemplates().some((t) => t.id === id);
+const isHiddenTpl = (id) => (S.hiddenTemplates || []).includes(id);
+let draftService = null;
+function blankService() {
+  return { id: "", name: "", scope: "", options: "2 creative directions, 2 revision rounds",
+    deliverables: [""], phases: [{ name: "", weeks: 1 }], depositPct: 75, vatPct: 7.5, _isNew: true };
+}
+function vServices() {
+  const rows = S.templates.slice().sort((a, b) => String(a.name).localeCompare(String(b.name)));
+  return `<p class="eyebrow">Admin</p><h1 class="page-title">All <span class="hl">services</span></h1>
+    <div class="toolbar"><span class="spacer"></span><button class="btn btn-primary" data-act="new-service">+ New service</button></div>
+    <div class="card" style="padding:0;overflow:auto"><table class="list">
+      <tr><th>Service</th><th>Terms</th><th>Contents</th><th></th></tr>
+      ${rows.map((t) => { const builtin = isBuiltinTpl(t.id), hidden = isHiddenTpl(t.id);
+        return `<tr${hidden ? ` style="opacity:.55"` : ""}><td><strong>${esc(t.name)}</strong><br><span style="color:var(--stone);font-size:.8rem">${esc(t.scope || "")} · ${builtin ? "Built in" : "Custom"}${hidden ? " · Hidden" : ""}</span></td>
+        <td>${t.depositPct}% deposit · ${t.vatPct}% VAT</td>
+        <td>${t.deliverables.length} deliverables · ${t.phases.length} phases</td>
+        <td><div class="rowactions"><button data-act="edit-service" data-id="${t.id}">Edit</button>${builtin ? `<button data-act="toggle-service" data-id="${t.id}">${hidden ? "Show" : "Hide"}</button>` : `<button data-act="del-service" data-id="${t.id}" style="color:var(--error)">Delete</button>`}</div></td></tr>`; }).join("")}
+    </table></div>
+    <p style="font-size:.8rem;color:var(--stone)">Hidden services leave the picker but stay on existing contracts. Custom services delete permanently.</p>`;
+}
+function vServiceEdit() {
+  const d = draftService;
+  return `<p class="eyebrow">Admin · service ${d._isNew ? "(new)" : esc(d.name)}</p>
+    <h1 class="page-title">${d._isNew ? "New" : "Edit"} <span class="hl">service</span></h1>
+    <div class="toolbar no-print">
+      <button class="btn btn-primary" data-act="save-service">Save service</button>
+      <button class="btn btn-ghost" data-act="cancel-service">Cancel</button>
+    </div><div id="err"></div>
+    <div class="card no-print" style="max-width:640px"><div class="formgrid">
+      <label class="f">Service name*<input data-sf="name" value="${esc(d.name)}"></label>
+      <label class="f">Scope<input data-sf="scope" value="${esc(d.scope)}"></label>
+      <label class="f full">Options and revisions<input data-sf="options" value="${esc(d.options)}"></label>
+      <label class="f">Deposit<select data-sf="depositPct"><option value="75"${Number(d.depositPct) === 75 ? " selected" : ""}>75%</option><option value="100"${Number(d.depositPct) === 100 ? " selected" : ""}>100%</option></select></label>
+      <label class="f">VAT %<input type="number" min="0" max="100" step="0.5" data-sf="vatPct" value="${d.vatPct}"></label>
+    </div>
+    <h3 class="mt">Deliverables <span style="font-weight:400;font-size:.8rem;color:var(--stone)">one per line</span></h3>
+    <div id="sdlist">
+      ${d.deliverables.map((x, i) => `<div class="deliverable-row"><input data-sd="${i}" value="${esc(x)}" placeholder="Deliverable ${i + 1}"><button data-act="del-sd" data-i="${i}">×</button></div>`).join("")}
+    </div><p class="mt"><button class="btn btn-ghost" data-act="add-sd">+ Add deliverable</button></p>
+    <h3 class="mt">Phases</h3>
+    <div id="splist">
+      ${d.phases.map((p, i) => `<div class="deliverable-row"><input data-spn="${i}" value="${esc(p.name)}" placeholder="Phase ${i + 1}" style="flex:3"><input type="number" min="0" data-spw="${i}" value="${p.weeks}" style="flex:1" aria-label="Weeks"><button data-act="del-sp" data-i="${i}">×</button></div>`).join("")}
+    </div><p class="mt"><button class="btn btn-ghost" data-act="add-sp">+ Add phase</button></p>
+    </div>`;
+}
+
 function vPicker() {  return `<p class="eyebrow">New contract</p><h1 class="page-title">Pick a <span class="hl">service</span></h1>
     <p class="lede">Each service prefills deliverables, phases, deposit and VAT. Same engine, any offering.</p>
     <div class="grid3">
-      ${S.templates.map((t) => `<button class="card" style="text-align:left;cursor:pointer" data-act="from-tpl" data-id="${t.id}">
+      ${S.templates.filter((t) => !(S.hiddenTemplates || []).includes(t.id)).map((t) => `<button class="card" style="text-align:left;cursor:pointer" data-act="from-tpl" data-id="${t.id}">
         <p class="eyebrow">${t.depositPct}% deposit · ${t.vatPct}% VAT</p>
         <h3 class="mt">${esc(t.name)}</h3>
         <p style="font-size:.85rem;color:var(--stone)">${t.deliverables.length} deliverables · ${t.phases.length} phases</p>
@@ -667,6 +716,8 @@ function render() {
   else if (route.view === "contracts") app.innerHTML = vContracts();
   else if (route.view === "clients") app.innerHTML = vClients();
   else if (route.view === "client-edit") app.innerHTML = vClientEdit();
+  else if (route.view === "services") app.innerHTML = vServices();
+  else if (route.view === "service-edit") app.innerHTML = vServiceEdit();
   else if (route.view === "picker") app.innerHTML = vPicker();
   else if (route.view === "editor") { app.innerHTML = vEditor(); enableEd(); }
   else if (route.view === "document") { app.innerHTML = vDocument(route.id); padD = pad("pad-d"); padC = pad("pad-c"); }
@@ -703,6 +754,13 @@ document.addEventListener("input", (e) => {
   }
   if (route.view === "client-edit" && draftClient) {
     if (t.dataset.cf) { draftClient[t.dataset.cf] = t.value; }
+    return;
+  }
+  if (route.view === "service-edit" && draftService) {
+    if (t.dataset.sf) { const k = t.dataset.sf; draftService[k] = (t.type === "number" || k === "depositPct") ? Number(t.value) : t.value; }
+    else if (t.dataset.sd !== undefined) { draftService.deliverables[Number(t.dataset.sd)] = t.value; }
+    else if (t.dataset.spn !== undefined) { draftService.phases[Number(t.dataset.spn)].name = t.value; }
+    else if (t.dataset.spw !== undefined) { draftService.phases[Number(t.dataset.spw)].weeks = Number(t.value); }
     return;
   }
   if (route.view === "editor" && draft) {
@@ -844,6 +902,47 @@ document.addEventListener("click", async (e) => {
   else if (act === "del-tpl") {
     const t = S.templates.find((x) => x.id === id);
     if (t && confirm(`Delete template "${t.name}"?`)) { S.templates = S.templates.filter((x) => x.id !== id); store.save(); render(); }
+  }
+  else if (act === "new-service") {
+    draftService = blankService();
+    route = { view: "service-edit", id: null }; render();
+  }
+  else if (act === "edit-service") {
+    const t = S.templates.find((x) => x.id === id); if (!t) return;
+    draftService = { ...JSON.parse(JSON.stringify(t)), _isNew: false };
+    route = { view: "service-edit", id: null }; render();
+  }
+  else if (act === "cancel-service") { draftService = null; route = { view: "services", id: null }; render(); }
+  else if (act === "add-sd") { if (draftService) { draftService.deliverables.push(""); render(); } }
+  else if (act === "del-sd") { if (draftService && draftService.deliverables.length > 1) { draftService.deliverables.splice(Number(b.dataset.i), 1); render(); } }
+  else if (act === "add-sp") { if (draftService) { draftService.phases.push({ name: "", weeks: 1 }); render(); } }
+  else if (act === "del-sp") { if (draftService && draftService.phases.length > 1) { draftService.phases.splice(Number(b.dataset.i), 1); render(); } }
+  else if (act === "save-service") {
+    const d = draftService; if (!d) return;
+    if (!d.name.trim()) { const er = $("#err"); if (er) er.innerHTML = `<div class="alert">Service name is required.</div>`; return; }
+    const snap = { id: d._isNew ? (d.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || uid()) : d.id,
+      name: d.name.trim(), scope: d.scope, summary: "", options: d.options,
+      deliverables: d.deliverables.map((x) => String(x).trim()).filter(Boolean),
+      phases: d.phases.filter((p) => String(p.name).trim()).map((p) => ({ name: String(p.name).trim(), weeks: Number(p.weeks) || 0 })),
+      depositPct: Number(d.depositPct) >= 100 ? 100 : 75, vatPct: Math.min(100, Math.max(0, Number(d.vatPct) || 0)), pay: { m1: "", m2: "" } };
+    if (!snap.deliverables.length) snap.deliverables = [""];
+    if (!snap.phases.length) snap.phases = [{ name: "", weeks: 1 }];
+    const i = S.templates.findIndex((x) => x.id === snap.id);
+    if (i >= 0) S.templates[i] = snap; else S.templates.push(snap);
+    store.save(); draftService = null;
+    route = { view: "services", id: null }; render(); toast("Service saved.");
+  }
+  else if (act === "del-service") {
+    const t = S.templates.find((x) => x.id === id);
+    if (!t || isBuiltinTpl(id)) return;
+    if (confirm(`Delete service "${t.name}"? Existing contracts keep working.`)) { S.templates = S.templates.filter((x) => x.id !== id); store.save(); render(); toast("Service deleted."); }
+  }
+  else if (act === "toggle-service") {
+    if (!isBuiltinTpl(id)) return;
+    S.hiddenTemplates = S.hiddenTemplates || [];
+    const i = S.hiddenTemplates.indexOf(id);
+    if (i >= 0) S.hiddenTemplates.splice(i, 1); else S.hiddenTemplates.push(id);
+    store.save(); render();
   }
   else if (act === "new-client") {
     draftClient = { id: "", name: "", business: "", email: "", phone: "", _isNew: true, _oldKey: "" };

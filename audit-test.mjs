@@ -10,6 +10,8 @@ assert.ok(src.includes('"presentations-profile"'), "retired id must be filtered"
 assert.ok(!src.includes('name: "Presentations & Company Profile"'), "combined tile must be gone");
 // clone keeps working
 assert.ok(src.includes('data-act="clone"'), "clone button missing");
+// services module: list + editor + picker hides hidden
+for (const s of ["vServices", "vServiceEdit", "blankService", "hiddenTemplates", "isBuiltinTpl", "New service"]) assert.ok(src.includes(s), "missing services: " + s);
 // validity countdown intact
 for (const s of ["validityDays", "validityBadge", "30 -", "EXPIRED", "D LEFT"]) assert.ok(src.includes(s), "missing validity: " + s);
 // validity math: 30-day window
