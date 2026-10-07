@@ -18,7 +18,11 @@ Double-click **`start-server.bat`**, then open http://127.0.0.1:8080
 - **Backup/Restore** — whole studio as one JSON file (Settings)
 - **Print / PDF** — browser print, document-only stylesheet
 
-Data lives in browser localStorage. Download a backup regularly.
+Data lives in browser localStorage. Download a backup regularly — encrypted backup is recommended (plain JSON contains client PII in readable form).
+
+## Data retention
+
+Client PII (names, contacts, signatures) stays only in this browser + whatever backups/signing files you export. Sharing files (`sign-<ref>.html`) and plain backups both contain PII — send only to the client, delete exports you no longer need, and keep backups no longer than the business relationship plus statutory archiving requires.
 
 ## Deploy (GitHub Pages + subdomain)
 

@@ -43,10 +43,11 @@ function blankContract() {
 }
 
 const store = {
-  data: { contracts: [], invoices: [], templates: [], clients: [], clientSeq: 1, settings: { designer: "MrJamesBrand Ltd", email: "hello@mrjamesbrandltd.com", social: "@mrjamesbrand", wm1: "Western Union cash pickup", wm2: "World Remit transfer", adminUser: "mrjamesbrandltd", lockHash: "s256:7b81f654e58ca14746e750df6a268d1f5a8fee8524e1bffdef7ddf12f71a3c95" } },
+  data: { contracts: [], invoices: [], templates: [], clients: [], clientSeq: 1, appliedCodes: {}, settings: { designer: "MrJamesBrand Ltd", email: "hello@mrjamesbrandltd.com", social: "@mrjamesbrand", wm1: "Western Union cash pickup", wm2: "World Remit transfer", adminUser: "mrjamesbrandltd", lockHash: "" } },
   load() {
     try { const d = JSON.parse(localStorage.getItem(KEY)); if (d && d.contracts) this.data = Object.assign(this.data, d); } catch (e) {}
     this.data.settings = Object.assign({ adminUser: "mrjamesbrandltd", lockHash: "" }, this.data.settings);
+    if (!this.data.appliedCodes || typeof this.data.appliedCodes !== "object") this.data.appliedCodes = {};
     if (!Array.isArray(this.data.templates)) this.data.templates = [];
     let seeded = false;
     for (const s of defaultTemplates()) if (!this.data.templates.some((t) => t.id === s.id)) { this.data.templates.push(s); seeded = true; }
@@ -607,10 +608,11 @@ function vSettings() {
         <tr><td>${OFFICIAL.zenith.bank}</td><td>${OFFICIAL.zenith.name}</td><td class="money">${OFFICIAL.zenith.number}</td></tr>
         <tr><td>${OFFICIAL.kuda.bank}</td><td>${OFFICIAL.kuda.name}</td><td class="money">${OFFICIAL.kuda.number}</td></tr></table></div>
     <div class="card no-print mt" style="max-width:640px"><h3>Backup</h3>
-      <p style="font-size:.85rem;color:var(--stone)">All contracts, invoices and settings live in this browser. Download a backup copy regularly.</p>
-      <p class="mt"><button class="btn btn-ghost" data-act="backup">Download backup</button>
+      <p style="font-size:.85rem;color:var(--stone)">All contracts, invoices and settings live in this browser. Encrypted backup is recommended — plain JSON contains client PII in readable form.</p>
+      <p class="mt"><button class="btn btn-primary" data-act="backup-enc">Download encrypted backup</button>
+      <button class="btn btn-ghost" data-act="backup">Plain backup</button>
       <button class="btn btn-ghost" data-act="restore">Restore backup</button>
-      <input type="file" id="restore-file" accept="application/json" style="display:none"></p></div>
+      <input type="file" id="restore-file" accept="application/json,.json" style="display:none"></p></div>
     <div class="card no-print mt" style="max-width:640px"><h3>Admin login ${S.settings.lockHash ? "(on)" : "(off)"}</h3>
       <p style="font-size:.85rem;color:var(--stone)">Password-gate this studio on shared devices. Stored as a hash, never plain text.</p>
       <div class="formgrid mt">
@@ -639,9 +641,15 @@ let padD = null, padC = null;
 
 /* ---------- render + events ---------- */
 const isLocked = () => !!S.settings.lockHash && sessionStorage.getItem("mjb-unlocked") !== "1";
+const needsSetup = () => !S.settings.lockHash;
+function lockNow() { sessionStorage.removeItem("mjb-unlocked"); route = { view: "dashboard", id: null }; render(); }
 function render() {
   const app = $("#app");
   const side = document.querySelector(".sidebar");
+  if (needsSetup()) {
+    if (side) side.style.display = "none";
+    app.innerHTML = vSetup(); window.scrollTo(0, 0); return;
+  }
   if (isLocked()) {
     if (side) side.style.display = "none";
     app.innerHTML = vLock(); window.scrollTo(0, 0); return;
@@ -762,6 +770,7 @@ document.addEventListener("click", async (e) => {
   else if (act === "invoice") raiseInvoice(id);
   else if (act === "share") {
     const c = S.contracts.find((x) => x.id === id); if (!c) return;
+    if (!confirm(`Share signing file for ${c.ref}?\n\nIt contains client PII (name, contact, project figures). Send only to the client, e.g. direct WhatsApp — not a group.`)) return;
     download(`sign-${c.ref}.html`, buildSignFile(c), "text/html");
     toast("Signing file downloaded. Send it to the client.");
   }
@@ -770,11 +779,20 @@ document.addEventListener("click", async (e) => {
     const raw = prompt("Paste the client return code:");
     if (!raw) return;
     try {
-      const p = JSON.parse(decodeURIComponent(escape(atob(raw.trim()))));
+      const code = raw.trim();
+      const p = JSON.parse(decodeURIComponent(escape(atob(code))));
       if (!p || p.contractId !== c.id || !p.clientSig) { alert("This code does not match the open contract."); return; }
+      if (p.ref && p.ref !== c.ref) { alert(`This code is for ${p.ref}, but the open contract is ${c.ref}.`); return; }
+      const prev = (S.appliedCodes || {})[c.id];
+      if (prev) {
+        const same = prev === code;
+        if (!confirm(same ? "This exact return code was already applied. Apply again?" : `A return code was already applied to ${c.ref}${p.issuedAt ? ` (this one issued ${p.issuedAt})` : ""}. Replace it?`)) return;
+      }
       c.sign.clientName = p.clientName || ""; c.sign.date = p.date || "";
       c.sign.paymentMethod = p.paymentMethod || ""; c.sign.paymentDate = p.paymentDate || "";
       c.sign.comments = p.comments || ""; c.sign.clientSig = p.clientSig;
+      if (!S.appliedCodes) S.appliedCodes = {};
+      S.appliedCodes[c.id] = code;
       if (c.sign.designerSig && c.status === "SENT") c.status = "SIGNED";
       store.save(); toast("Client signature applied."); render();
     } catch (e) { alert("Invalid return code."); }
@@ -797,7 +815,19 @@ document.addEventListener("click", async (e) => {
     if ($("#set-adminuser")) S.settings.adminUser = $("#set-adminuser").value.trim() || "mrjamesbrandltd";
     store.save(); alert("Settings saved."); route = { view: "dashboard", id: null }; render();
   }
-  else if (act === "backup") { download(`contract-studio-backup-${todayISO()}.json`, JSON.stringify(store.data, null, 2)); toast("Backup downloaded."); }
+  else if (act === "backup") {
+    if (!confirm("Plain backup contains client names, contacts and signatures in readable form. Download anyway? (Encrypted backup is recommended.)")) return;
+    download(`contract-studio-backup-${todayISO()}.json`, JSON.stringify(store.data, null, 2)); toast("Plain backup downloaded.");
+  }
+  else if (act === "backup-enc") {
+    const a = prompt("Set a backup password (give it to whoever restores this file):");
+    if (!a || a.length < 4) { if (a !== null) alert("Backup password needs at least 4 characters."); return; }
+    const b = prompt("Confirm backup password:");
+    if (a !== b) { alert("Passwords do not match."); return; }
+    encBackup(a, JSON.stringify(store.data)).then((env) => {
+      download(`contract-studio-backup-${todayISO()}.enc.json`, env); toast("Encrypted backup downloaded.");
+    }).catch(() => alert("Encryption failed on this browser."));
+  }
   else if (act === "restore") { const f = $("#restore-file"); if (f) f.click(); }
   else if (act === "logo-pick") { const f = $("#logo-file"); if (f) f.click(); }
   else if (act === "logo-clear") {
@@ -903,10 +933,42 @@ async function sha(s) {
 async function tryUnlock() {
   const u = $("#lockuser").value.trim().toLowerCase(), v = $("#lockpass").value;
   if (u === String(S.settings.adminUser || "").toLowerCase() && (await sha(v)) === S.settings.lockHash) {
-    sessionStorage.setItem("mjb-unlocked", "1"); render(); toast("Welcome back.");
+    sessionStorage.setItem("mjb-unlocked", "1"); poke(); render(); toast("Welcome back.");
   } else { const er = $("#lockerr"); if (er) er.innerHTML = `<div class="alert">Wrong username or password.</div>`; }
 }
-document.addEventListener("submit", (e) => { if (e.target.id === "lockform") { e.preventDefault(); tryUnlock(); } });
+function vSetup() {
+  return `<div style="min-height:80vh;display:flex;align-items:center;justify-content:center">
+    <form id="setupform" class="card" style="width:100%;max-width:380px">
+      <p class="eyebrow">First run</p><h1 class="page-title">Set admin <span class="hl">password</span></h1>
+      <p style="font-size:.85rem;color:var(--stone)">No password ships with the studio. Create one now — it stays only in this browser.</p>
+      <div id="lockerr"></div>
+      <label class="f mt">Username<input id="lockuser" autocomplete="username" value="${esc(S.settings.adminUser || "mrjamesbrandltd")}"></label>
+      <label class="f mt">New password<input id="lockpass" type="password" autocomplete="new-password"></label>
+      <label class="f mt">Confirm<input id="lockpass2" type="password" autocomplete="new-password"></label>
+      <p class="mt"><button class="btn btn-primary" type="submit" style="width:100%">Create password</button></p>
+    </form></div>`;
+}
+async function trySetup() {
+  const u = $("#lockuser").value.trim() || "mrjamesbrandltd", a = $("#lockpass").value, b = $("#lockpass2").value;
+  const er = $("#lockerr");
+  if (!a || a.length < 4) { if (er) er.innerHTML = `<div class="alert">Password needs at least 4 characters.</div>`; return; }
+  if (a !== b) { if (er) er.innerHTML = `<div class="alert">Passwords do not match.</div>`; return; }
+  S.settings.adminUser = u; S.settings.lockHash = await sha(a); store.save();
+  sessionStorage.setItem("mjb-unlocked", "1"); poke(); render(); toast("Password created.");
+}
+/* Idle auto-lock: 10 min without input + immediate lock when tab hidden. */
+let lastAct = Date.now();
+function poke() { lastAct = Date.now(); }
+["click", "input", "keydown", "touchstart"].forEach((ev) => document.addEventListener(ev, poke, { passive: true }));
+document.addEventListener("visibilitychange", () => { if (document.hidden && S.settings.lockHash) lockNow(); });
+setInterval(() => {
+  if (!S.settings.lockHash || isLocked() || needsSetup()) return;
+  if (Date.now() - lastAct > 10 * 60 * 1000) lockNow();
+}, 30000);
+document.addEventListener("submit", (e) => {
+  if (e.target.id === "lockform") { e.preventDefault(); tryUnlock(); }
+  else if (e.target.id === "setupform") { e.preventDefault(); trySetup(); }
+});
 document.addEventListener("focusout", (e) => {
   if (route.view !== "editor" || !draft) return;
   const el = e.target.closest ? e.target.closest("[data-ep],[data-epn],[data-epw]") : null;
@@ -943,9 +1005,21 @@ document.addEventListener("change", (e) => {
   if (e.target.id === "restore-file") {
     const f = e.target.files[0]; if (!f) return;
     const r = new FileReader();
-    r.onload = () => {
+    r.onload = async () => {
       try {
         const d = JSON.parse(r.result);
+        if (d && d.enc === 1 && d.salt && d.iv && d.data) {
+          const pw = prompt("Encrypted backup — enter backup password:");
+          if (!pw) return;
+          let plain;
+          try { plain = await decBackup(pw, d); }
+          catch (_) { alert("Wrong password or corrupt backup."); return; }
+          const b = JSON.parse(plain);
+          if (!b || !Array.isArray(b.contracts) || !b.settings) throw new Error("bad");
+          store.data = Object.assign(store.data, b); store.save(); draft = null;
+          toast("Encrypted backup restored."); route = { view: "dashboard", id: null }; render();
+          return;
+        }
         if (!d || !Array.isArray(d.contracts) || !d.settings) throw new Error("bad");
         store.data = Object.assign(store.data, d); store.save(); draft = null;
         toast("Backup restored."); route = { view: "dashboard", id: null }; render();
@@ -959,6 +1033,24 @@ function download(name, text, type) {
   a.href = URL.createObjectURL(new Blob([text], { type: type || "application/json" }));
   a.download = name; document.body.appendChild(a); a.click();
   setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 800);
+}
+/* Encrypted backup: PBKDF2(password) -> AES-GCM. Envelope {enc:1,salt,iv,data} base64. */
+const b64e = (b) => btoa(String.fromCharCode(...new Uint8Array(b)));
+const b64d = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+async function backupKey(pw, salt) {
+  const km = await crypto.subtle.importKey("raw", new TextEncoder().encode(pw), "PBKDF2", false, ["deriveKey"]);
+  return crypto.subtle.deriveKey({ name: "PBKDF2", salt, iterations: 50000, hash: "SHA-256" }, km, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
+}
+async function encBackup(pw, plain) {
+  const salt = crypto.getRandomValues(new Uint8Array(16)), iv = crypto.getRandomValues(new Uint8Array(12));
+  const key = await backupKey(pw, salt);
+  const ct = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, new TextEncoder().encode(plain));
+  return JSON.stringify({ enc: 1, salt: b64e(salt), iv: b64e(iv), data: b64e(ct) });
+}
+async function decBackup(pw, env) {
+  const key = await backupKey(pw, b64d(env.salt));
+  const pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv: b64d(env.iv) }, key, b64d(env.data));
+  return new TextDecoder().decode(pt);
 }
 /* Self-contained signing file: static contract + client pad + return-code generator. */
 function buildSignFile(c) {
@@ -1015,6 +1107,8 @@ ${doc}
 <label id="code-wrap" style="display:none">Return code (send this back)<textarea id="code" class="code" readonly></textarea></label>
 </div></main><script>
 var CID=${JSON.stringify(c.id)};
+var CREF=${JSON.stringify(c.ref)};
+var ISSUED=${JSON.stringify(todayISO())};
 var cv=document.getElementById("pad"),ctx=cv.getContext("2d"),draw=false,last=null,used=false;
 function fit(){cv.width=cv.offsetWidth*1.5;cv.height=225;ctx.lineWidth=5;ctx.lineCap="round";ctx.strokeStyle="#111";}
 fit();addEventListener("resize",fit);
@@ -1025,7 +1119,7 @@ cv.onpointerup=function(){draw=false;};
 document.getElementById("b-clear").onclick=function(){ctx.clearRect(0,0,cv.width,cv.height);used=false;};
 document.getElementById("b-code").onclick=function(){
 if(!used){alert("Draw your signature first.");return;}
-var payload={contractId:CID,clientName:document.getElementById("f-name").value,date:document.getElementById("f-date").value,paymentMethod:document.getElementById("f-pay").value,paymentDate:document.getElementById("f-paydate").value,comments:document.getElementById("f-comments").value,clientSig:cv.toDataURL("image/png")};
+var payload={contractId:CID,ref:CREF,issuedAt:ISSUED,clientName:document.getElementById("f-name").value,date:document.getElementById("f-date").value,paymentMethod:document.getElementById("f-pay").value,paymentDate:document.getElementById("f-paydate").value,comments:document.getElementById("f-comments").value,clientSig:cv.toDataURL("image/png")};
 var code=btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
 document.getElementById("code").value=code;document.getElementById("code-wrap").style.display="flex";
 document.getElementById("code").select();

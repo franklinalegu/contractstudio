@@ -24,3 +24,8 @@
 
 ## Test baseline command
 `node btn-test.mjs`, `roundtrip-test.mjs`, `lock-test.mjs`, `logo-test.mjs`, `audit-test.mjs` (in Temp\opencode).
+
+## Progress 2026-10-07 ~10:07
+- All 5 threats done in app.js (v6): no seeded hash + forced first-run setup; 10-min idle + tab-hidden auto-lock; AES-GCM encrypted backup (PBKDF2) with plain-export confirm; return codes stamped with ref + issue date, reuse warns; share-file PII confirm + README retention note.
+- Features 1–4 were already shipped (clone, PART tracking, validity countdown, clients view) — covered by tests.
+- 5 suites green. Fresh Desktop contract-studio.zip rebuilt.
