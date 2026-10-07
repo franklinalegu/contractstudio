@@ -304,7 +304,7 @@ function vDashboard() {
   const isEmpty = !cs.length && !inv.length;
   const st = (s) => cs.filter((c) => c.status === s).length;
   const sums = (list) => { const m = {}; list.forEach((i) => { m[i.currency] = (m[i.currency] || 0) + invTotal(i); }); return m; };
-  const fmtSums = (m) => { const e = Object.entries(m); return e.length ? e.map(([c, v]) => money(v, c)).join(" · ") : "—"; };
+  const fmtSums = (m) => { const e = Object.entries(m); return e.length ? e.map(([c, v]) => money(v, c)).join(" · ") : "Nothing"; };
   const open = inv.filter((i) => i.status !== "PAID"), paid = inv.filter((i) => i.status === "PAID");
   /* action-needed rows: awaiting signature, quotes expiring ≤7d, overdue invoices */
   const rows = [];
@@ -325,12 +325,12 @@ function vDashboard() {
     <p class="eyebrow">Contract Studio</p>
     <h1 class="page-title" style="font-size:1.7rem;margin:0 0 16px">Prepare &amp; <span class="hl">sign contracts.</span></h1>
     ${focus}
-    <div class="grid3 mt">
+    ${isEmpty ? "" : `<div class="grid3 mt">
       <div class="card"><p class="eyebrow">Contracts</p><h2 style="font-size:2rem">${cs.length}</h2><p>${st("DRAFT")} draft · ${st("SENT")} sent · ${st("SIGNED")} signed</p></div>
       <div class="card"><p class="eyebrow">Invoices</p><h2 style="font-size:2rem">${inv.length}</h2><p>${fmtSums(sums(open))} outstanding<br>${fmtSums(sums(paid))} collected</p></div>
-      ${isEmpty ? "" : `<div class="card"><p class="eyebrow">Create</p><h2 style="font-size:1.2rem">New</h2>
-        <p class="mt"><button class="btn btn-lime" data-act="new">+ Contract</button> <button class="btn btn-ghost" data-act="new-inv">+ Invoice</button></p></div>`}
-    </div>
+      <div class="card"><p class="eyebrow">Create</p><h2 style="font-size:1.2rem">New</h2>
+        <p class="mt"><button class="btn btn-lime" data-act="new">+ Contract</button> <button class="btn btn-ghost" data-act="new-inv">+ Invoice</button></p></div>
+    </div>`}
     ${isEmpty ? "" : `<h3 class="mt" style="margin:24px 0 12px">Recent contracts</h3>${contractTable(cs.slice(-5).reverse())}`}`;
 }
 
