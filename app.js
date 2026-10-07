@@ -960,11 +960,11 @@ async function trySetup() {
   S.settings.adminUser = u; S.settings.lockHash = await sha(a); store.save();
   sessionStorage.setItem("mjb-unlocked", "1"); poke(); render(); toast("Password created.");
 }
-/* Idle auto-lock: 10 min without input + immediate lock when tab hidden. */
+/* Idle auto-lock: 10 min without input. (Hidden tabs go quiet too, so the
+   idle timer already covers them — no separate instant lock on tab switch.) */
 let lastAct = Date.now();
 function poke() { lastAct = Date.now(); }
 ["click", "input", "keydown", "touchstart"].forEach((ev) => document.addEventListener(ev, poke, { passive: true }));
-document.addEventListener("visibilitychange", () => { if (document.hidden && S.settings.lockHash) lockNow(); });
 setInterval(() => {
   if (!S.settings.lockHash || isLocked() || needsSetup()) return;
   if (Date.now() - lastAct > 10 * 60 * 1000) lockNow();
