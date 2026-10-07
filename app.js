@@ -315,8 +315,8 @@ function vDashboard() {
       <div class="card"><p class="eyebrow">Create</p><h2 style="font-size:1.2rem">New contract</h2>
         <p class="mt"><button class="btn btn-lime" data-act="new">+ New Contract</button></p></div>
     </div>
-    <h3 class="mt" style="margin:24px 0 12px">Recent contracts</h3>
-    ${contractTable(cs.slice(-5).reverse())}`;
+    ${cs.length ? `<h3 class="mt" style="margin:24px 0 12px">Recent contracts</h3>
+    ${contractTable(cs.slice(-5).reverse())}` : ""}`;
 }
 
 function contractTable(cs) {
