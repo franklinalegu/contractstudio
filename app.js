@@ -667,6 +667,27 @@ function persistInv() {
   return true;
 }
 
+/* Coupon book: shared renderer used by the Coupons view. */
+function couponManagerHTML() {
+  return `<h3>Coupons</h3>
+      <p style="font-size:.85rem;color:var(--stone)">Reusable price cuts for invoices. Percent cuts scale with the bill. Flat cuts read in the invoice currency.</p>
+      ${S.coupons.length ? S.coupons.map((c) => `<p style="display:flex;justify-content:space-between;align-items:center;gap:12px;border-bottom:1px solid var(--mist);padding:8px 0">
+        <span><strong>${esc(c.code)}</strong> <span style="color:var(--stone);font-size:.8rem">${c.kind === "flat" ? "Flat" : c.value + "%"}${c.kind === "flat" ? " " + c.value : ""} · ${c.active ? "On" : "Off"}</span></span>
+        <span class="rowactions"><button class="btn btn-ghost" data-act="toggle-coupon" data-id="${esc(c.code)}">${c.active ? "Off" : "On"}</button><button class="btn btn-danger" data-act="del-coupon" data-id="${esc(c.code)}">Delete</button></span></p>`).join("")
+        : `<p class="mt" style="font-size:.85rem;color:var(--stone)">No coupons yet.</p>`}
+      <div class="formgrid mt">
+        <label class="f">Code<input id="cp-code" placeholder="FESTIVE10" style="text-transform:uppercase"></label>
+        <label class="f">Kind<select id="cp-kind"><option value="percent">Percent %</option><option value="flat">Flat amount</option></select></label>
+        <label class="f">Value<input id="cp-value" type="number" min="0" placeholder="10"></label>
+      </div>
+      <p class="mt"><button class="btn btn-primary" data-act="add-coupon">Add coupon</button></p>`;
+}
+function vCoupons() {
+  return `<p class="eyebrow">Admin</p><h1 class="page-title">All <span class="hl">coupons</span></h1>
+    <div class="card no-print" style="max-width:640px">${couponManagerHTML()}</div>
+    <p style="font-size:.8rem;color:var(--stone)">Apply a code while creating an invoice or on any unpaid invoice. Deleting a coupon leaves past invoices untouched.</p>`;
+}
+
 function vSettings() {
   const s = S.settings;
   return `<p class="eyebrow">Admin</p><h1 class="page-title">Studio <span class="hl">settings</span></h1>
@@ -698,18 +719,6 @@ function vSettings() {
       <button class="btn btn-ghost" data-act="backup">Plain backup</button>
       <button class="btn btn-ghost" data-act="restore">Restore backup</button>
       <input type="file" id="restore-file" accept="application/json,.json" style="display:none"></p></div>
-    <div class="card no-print mt" style="max-width:640px"><h3>Coupons</h3>
-      <p style="font-size:.85rem;color:var(--stone)">Reusable price cuts for invoices. Percent cuts scale with the bill. Flat cuts read in the invoice currency.</p>
-      ${S.coupons.length ? S.coupons.map((c) => `<p style="display:flex;justify-content:space-between;align-items:center;gap:12px;border-bottom:1px solid var(--mist);padding:8px 0">
-        <span><strong>${esc(c.code)}</strong> <span style="color:var(--stone);font-size:.8rem">${c.kind === "flat" ? "Flat" : c.value + "%"}${c.kind === "flat" ? " " + c.value : ""} · ${c.active ? "On" : "Off"}</span></span>
-        <span class="rowactions"><button class="btn btn-ghost" data-act="toggle-coupon" data-id="${esc(c.code)}">${c.active ? "Off" : "On"}</button><button class="btn btn-danger" data-act="del-coupon" data-id="${esc(c.code)}">Delete</button></span></p>`).join("")
-        : `<p class="mt" style="font-size:.85rem;color:var(--stone)">No coupons yet.</p>`}
-      <div class="formgrid mt">
-        <label class="f">Code<input id="cp-code" placeholder="FESTIVE10" style="text-transform:uppercase"></label>
-        <label class="f">Kind<select id="cp-kind"><option value="percent">Percent %</option><option value="flat">Flat amount</option></select></label>
-        <label class="f">Value<input id="cp-value" type="number" min="0" placeholder="10"></label>
-      </div>
-      <p class="mt"><button class="btn btn-primary" data-act="add-coupon">Add coupon</button></p></div>
     <div class="card no-print mt" style="max-width:640px"><h3>Admin login ${S.settings.lockHash ? "(on)" : "(off)"}</h3>
       <p style="font-size:.85rem;color:var(--stone)">Password-gate this studio on shared devices. Stored as a hash, never plain text.</p>
       <div class="formgrid mt">
@@ -758,6 +767,7 @@ function render() {
   else if (route.view === "client-edit") app.innerHTML = vClientEdit();
   else if (route.view === "services") app.innerHTML = vServices();
   else if (route.view === "service-edit") app.innerHTML = vServiceEdit();
+  else if (route.view === "coupons") app.innerHTML = vCoupons();
   else if (route.view === "picker") app.innerHTML = vPicker();
   else if (route.view === "editor") { app.innerHTML = vEditor(); enableEd(); }
   else if (route.view === "document") { app.innerHTML = vDocument(route.id); padD = pad("pad-d"); padC = pad("pad-c"); }
