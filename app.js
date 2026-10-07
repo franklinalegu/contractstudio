@@ -740,7 +740,7 @@ function vSettings() {
       <button class="btn btn-ghost" data-act="backup">Plain backup</button>
       <button class="btn btn-ghost" data-act="restore">Restore backup</button>
       <input type="file" id="restore-file" accept="application/json,.json" style="display:none"></p></div>
-    <div class="card no-print mt" style="max-width:640px"><h3>Admin login ${S.settings.lockHash ? "(on)" : "(off)"}</h3>
+    <div class="card no-print mt" style="max-width:640px"><h3>Contract login ${S.settings.lockHash ? "(on)" : "(off)"}</h3>
       <p style="font-size:.85rem;color:var(--stone)">Password-gate this studio on shared devices. Stored as a hash, never plain text.</p>
       <div class="formgrid mt">
         <label class="f">Username<input id="set-adminuser" value="${esc(S.settings.adminUser || "")}" autocomplete="username"></label>
@@ -1108,7 +1108,7 @@ document.addEventListener("click", async (e) => {
     if (a !== b2) { alert("Passwords do not match."); return; }
     S.settings.lockHash = await sha(a); store.save();
     $("#set-pass").value = ""; $("#set-pass2").value = "";
-    toast("Admin lock is on."); render();
+    toast("Contract lock is on."); render();
   }
   else if (act === "remove-lock") {
     if (confirm("Remove the admin lock?")) { S.settings.lockHash = ""; store.save(); render(); }
@@ -1141,7 +1141,7 @@ function toast(m) { let t = $("#toast"); if (!t) { t = document.createElement("d
 function vLock() {
   return `<div style="min-height:80vh;display:flex;align-items:center;justify-content:center">
     <form id="lockform" class="card" style="width:100%;max-width:380px">
-      <p class="eyebrow">Restricted</p><h1 class="page-title">Admin <span class="hl">login</span></h1>
+      <p class="eyebrow">Restricted</p><h1 class="page-title">Contract <span class="hl">login</span></h1>
       <div id="lockerr"></div>
       <label class="f mt">Username<input id="lockuser" autocomplete="username" value="mrjamesbrandltd"></label>
       <label class="f mt">Password<input id="lockpass" type="password" autocomplete="current-password"></label>
