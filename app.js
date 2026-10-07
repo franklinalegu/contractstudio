@@ -1153,6 +1153,7 @@ function toast(m) { let t = $("#toast"); if (!t) { t = document.createElement("d
 function vLock() {
   return `<div style="min-height:80vh;display:flex;align-items:center;justify-content:center">
     <form id="lockform" class="card" style="width:100%;max-width:380px">
+      ${S.settings.logo ? `<p style="margin:0 0 12px"><img src="${S.settings.logo}" alt="studio logo" style="max-height:56px;max-width:180px"></p>` : `<p class="eyebrow" style="margin:0 0 12px">MJB</p>`}
       <p class="eyebrow">Restricted</p><h1 class="page-title" style="font-size:2.2rem;white-space:nowrap">Contract <span class="hl">login</span></h1>
       <div id="lockerr"></div>
       <label class="f mt">Username<input id="lockuser" autocomplete="username" value="mrjamesbrandltd"></label>
