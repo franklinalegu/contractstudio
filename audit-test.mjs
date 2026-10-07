@@ -5,6 +5,9 @@ const readme = readFileSync(new URL("./README.md", import.meta.url), "utf8");
 // return-code stamp: ref + issuedAt in payload, ref check + reuse warning on apply
 for (const s of ["appliedCodes", "CREF", "ISSUED", "ref:CREF", "issuedAt:ISSUED", "already applied"]) assert.ok(src.includes(s), "missing code-reuse: " + s);
 assert.ok(/p\.ref && p\.ref !== c\.ref/.test(src), "must reject cross-contract codes");
+// retired combined tile self-cleans on load
+assert.ok(src.includes('"presentations-profile"'), "retired id must be filtered");
+assert.ok(!src.includes('name: "Presentations & Company Profile"'), "combined tile must be gone");
 // clone keeps working
 assert.ok(src.includes('data-act="clone"'), "clone button missing");
 // validity countdown intact

@@ -51,9 +51,13 @@ const store = {
     if (!Array.isArray(this.data.templates)) this.data.templates = [];
     let seeded = false;
     for (const s of defaultTemplates()) if (!this.data.templates.some((t) => t.id === s.id)) { this.data.templates.push(s); seeded = true; }
+    /* retired superseded templates self-clean on load (split combined tile) */
+    const retired = ["presentations-profile"];
+    const nTpl = this.data.templates.length;
+    this.data.templates = this.data.templates.filter((t) => !retired.includes(t.id));
     if (!Array.isArray(this.data.clients)) this.data.clients = [];
     /* explicit client records, backfilled from existing paperwork */
-    let touched = seeded;
+    let touched = seeded || this.data.templates.length !== nTpl;
     const seen = {};
     this.data.clients.forEach((r) => { seen[(r.id || ("n:" + String(r.name || "").trim().toLowerCase()))] = r; });
     const ensureRec = (id, name, business, email, phone) => {
