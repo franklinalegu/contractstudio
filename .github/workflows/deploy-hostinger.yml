@@ -1,0 +1,36 @@
+name: Deploy to Hostinger
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deploy-hostinger
+  cancel-in-progress: true
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Test
+        run: |
+          node --check app.js
+          for t in audit-test.mjs btn-test.mjs lock-test.mjs logo-test.mjs roundtrip-test.mjs; do node "$t"; done
+      - name: Upload to Hostinger
+        env:
+          SSH_KEY: ${{ secrets.HOSTINGER_SSH_KEY }}
+          DEPLOY_HOST: ${{ secrets.HOSTINGER_HOST }}
+          DEPLOY_PORT: ${{ secrets.HOSTINGER_PORT }}
+          DEPLOY_USER: ${{ secrets.HOSTINGER_USER }}
+          DEPLOY_DIR: ${{ secrets.HOSTINGER_DIR }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" | tr -d '\r' > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          scp -O -P "$DEPLOY_PORT" -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new \
+            index.html app.js styles.css .htaccess \
+            "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_DIR/"
