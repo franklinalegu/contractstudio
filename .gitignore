@@ -1,0 +1,11 @@
+# Client PII / generated invoices — local only
+invoice-INV-MJB-2026-7534.html
+import-invoice-7534.html
+
+# Local backups and exports
+*.enc.json
+
+# OS noise
+Thumbs.db
+Desktop.ini
+.DS_Store
