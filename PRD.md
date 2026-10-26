@@ -20,7 +20,7 @@ Design work was agreed in chat threads and scattered documents. Scope drifted, d
 
 ## 4. Non goals
 
-1. No team accounts or roles. One admin lock guards one studio.
+1. No team accounts or roles. One shared studio login guards one studio.
 2. No online payments. Invoices instruct payment to official studio accounts; receipts are confirmed by the principal.
 3. No legal automation. Fixed legal text ships with each contract; trademark and registration advice stays outside the product.
 4. No marketing site features. The public website lives separately; the studio embeds only the contracting bundle.
@@ -84,7 +84,7 @@ Design work was agreed in chat threads and scattered documents. Scope drifted, d
 
 1. Show counts plus pipeline by status and money outstanding against collected.
 2. Surface needs attention: pending signatures, quotes near expiry, overdue invoices.
-3. Stay readable at zero records with a first run path to the first contract.
+3. Stay readable at zero records with a clear empty-state path to the first contract.
 
 ## 7. Money and legal rules
 
@@ -95,11 +95,12 @@ Design work was agreed in chat threads and scattered documents. Scope drifted, d
 
 ## 8. Security and privacy requirements
 
-1. No credential ships in the product. First run forces creation of a fresh admin password.
-2. Passwords persist as salted SHA 256 hashes only.
-3. Unlock is per tab. Idle ten minutes locks. Closing the tab always requires login again.
-4. Every export carrying client PII asks for confirmation first.
-5. Retention guidance ships in product docs: browser plus backups plus signing files are the only stores, and exports are deleted when no longer needed.
+1. The studio password lives in the online database as a PHP password hash. No plaintext credential ships in the product or the client.
+2. Passwords persist as salted one-way hashes only and are never returned to the browser.
+3. Every device opens on the login screen; first-run setup does not exist once the account is provisioned.
+4. Unlock is per tab. Idle ten minutes locks. Closing the tab always requires login again. Five wrong tries start a growing wait enforced by the server.
+5. Every export carrying client PII asks for confirmation first.
+6. Retention guidance ships in product docs: browser data plus backups plus signing files are the only stores, and exports are deleted when no longer needed. The login database holds only the account hash and throttle counters.
 
 ## 9. UX requirements
 
@@ -115,7 +116,7 @@ Design work was agreed in chat threads and scattered documents. Scope drifted, d
 2. **Invoice.** Reference, linked contract or standalone, status, currency, dates, client snapshot, line items, subtotal, discount, coupon snapshot, VAT, deposit tick, balance tick.
 3. **Client.** Stable ID, name, business, email, phone.
 4. **Template.** ID, name, scope, options, deliverables, phases, deposit, VAT, payment defaults.
-5. **Settings.** Studio identity, contacts, defaults, logo, admin username, lock hash.
+5. **Settings.** Studio identity, contacts, defaults, logo. The login account lives only in the server database.
 6. **Applied codes.** Last return code per contract for reuse detection.
 7. **Coupon.** Code, kind, value, active flag, optional expiry date, single use record with client plus service plus invoice.
 
@@ -129,14 +130,14 @@ Design work was agreed in chat threads and scattered documents. Scope drifted, d
 ## 12. Rollout and operations
 
 1. Local use runs from `start-server.bat` on the studio machine.
-2. Public use deploys from `main` through GitHub Actions to the custom subdomain, followed by first run password creation on the live URL.
+2. Public use deploys from `main` through GitHub Actions to the Hostinger contract directory, with the login account seeded once in the online database.
 3. The website embeds the static bundle, refreshed from the source folder on every studio change.
 4. Backup discipline from `GUIDE.md` section 7 is part of the definition of done, not an afterthought.
 
 ## 13. Risks and mitigations
 
 1. **Browser data loss.** Mitigated by the encrypted backup routine after every signed contract and paid invoice.
-2. **Shared device exposure.** Mitigated by per tab unlock, idle lock, and the manual Lock item.
+2. **Shared device exposure.** Mitigated by server-side login, per tab unlock, idle lock, and the manual Lock item.
 3. **Quote confusion.** Mitigated by 30 day validity, expiry flags, and clone to reissue.
 4. **Payment disputes.** Mitigated by deposit before work, files after balance, printed accounts, and reference narrations.
 5. **Scope drift.** Mitigated by templated deliverables plus fixed legal text on every contract.

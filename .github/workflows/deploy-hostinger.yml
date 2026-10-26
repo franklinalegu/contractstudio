@@ -31,6 +31,13 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "$SSH_KEY" | tr -d '\r' > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
+          ssh -p "$DEPLOY_PORT" -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new \
+            "$DEPLOY_USER@$DEPLOY_HOST" "mkdir -p '$DEPLOY_DIR/api'"
           scp -O -P "$DEPLOY_PORT" -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new \
             index.html app.js styles.css .htaccess \
             "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_DIR/"
+          scp -O -P "$DEPLOY_PORT" -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new \
+            api/auth.php api/.htaccess \
+            "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_DIR/api/"
+          ssh -p "$DEPLOY_PORT" -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new \
+            "$DEPLOY_USER@$DEPLOY_HOST" "chmod 755 '$DEPLOY_DIR/api' && chmod 644 '$DEPLOY_DIR/api/auth.php' '$DEPLOY_DIR/api/.htaccess'"

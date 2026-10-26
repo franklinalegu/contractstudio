@@ -60,8 +60,8 @@ Each tile prefills scope, deliverables, phases, payment options, deposit, and VA
 
 ## Security model
 
-* **First run setup.** No password ships with the studio. The first screen forces creation of an admin username plus password of 8 characters or more. The password is stored only as a salted SHA 256 hash, never as plain text.
-* **Locking.** Unlock lasts for the browser tab only. Closing the tab always asks for login again. Ten minutes without input locks the studio automatically. Five wrong tries trigger a growing wait that survives reloads, so bots cannot guess fast. The page also hides from search crawlers.
+* **Server-side password.** The studio password is provisioned in an online SQLite database as a PHP password hash, never as plain text and never in the client. Every device opens on the login screen; there is no first-run setup. Change the password from Settings.
+* **Locking.** Unlock lasts for the browser tab only. Closing the tab always asks for login again. Ten minutes without input locks the studio automatically. Five wrong tries trigger a growing wait enforced by the server that survives reloads and applies across devices. The page also hides from search crawlers.
 * **Encrypted backups.** Recommended for every backup. Protected by a password using PBKDF2 key derivation plus AES GCM 256 bit encryption. A wrong password cannot open the file. Plain JSON export stays available but asks for explicit confirmation first, since it contains readable client PII.
 * **Return codes.** Each signing file stamps its contract reference plus issue date into the code. Pasting a code from a different contract is rejected. Pasting a code that was already applied raises a warning before anything is replaced.
 * **Sharing care.** Exporting a signing file asks for confirmation first, since the file carries client PII. Send it direct to the client only, never to a group.
@@ -70,17 +70,17 @@ Each tile prefills scope, deliverables, phases, payment options, deposit, and VA
 
 ## Data, backup, and retention
 
-* All records live in browser localStorage under one key. There is no server copy. If the browser profile is wiped, only the last downloaded backup can restore the studio.
+* Contracts, invoices, clients, and settings live in browser localStorage under one key. There is no server copy of that data. If the browser profile is wiped, only the last downloaded backup can restore the studio. The login account and throttle counters live in a SQLite database outside the web root.
 * Recommended routine: encrypted backup after every signed contract and every paid invoice. Keep the backup password with whoever must restore the file.
 * Client PII such as names, contacts, and signatures exists in three places only: this browser, exported backups, and signing files. Delete exports that are no longer needed. Keep backups only for the length of the business relationship plus whatever archiving the law requires. See `GUIDE.md` for the full routine.
 
-## Deploy on GitHub Pages with a subdomain
+## Deploy to Hostinger
 
-Push `main`. The `pages.yml` workflow publishes this folder automatically.
+Push `main`. The `deploy-hostinger.yml` workflow runs the test suites, then copies the site files plus `api/auth.php` and `api/.htaccess` to the contract directory on Hostinger. GitHub Pages cannot execute PHP, so the login only works on the Hostinger deployment.
 
-1. Repo, then Settings, then Pages, then Source: **GitHub Actions**.
-2. DNS: `CNAME contracts` pointing to `<user>.github.io`. Then Pages, then Custom domain: `contracts.mrjamesbrandltd.com`. HTTPS is enforced automatically.
-3. Open the live URL once and create the admin password on the first run screen.
+1. Create the account once on the server with a PHP `password_hash` in `~/portfolio-data/contract-studio.sqlite`, outside the web root. The directory must be `700` and the database `600`.
+2. Upload the site files and the `api/` folder. The client calls `api/auth.php`; it never receives the hash or the password.
+3. Change the password from Settings whenever team access changes. Do not delete or re-seed the database unless you intend to reset every device.
 
 ## Website
 
@@ -92,6 +92,8 @@ The main studio website lives at https://github.com/franklinalegu/mrjamesbrand a
 |---|---|
 | `index.html` | Shell, sidebar, and mobile nav |
 | `app.js` | The whole studio: store, views, documents, signing files, crypto |
+| `api/auth.php` | Server-side login, password change, and throttling |
+| `api/.htaccess` | Blocks direct access to database and log files |
 | `styles.css` | Brand styling plus print rules |
 | `start-server.bat` | Local server launcher |
 | `morning-start.bat` | Morning routine: server plus agenda popup |

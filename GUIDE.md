@@ -2,10 +2,10 @@
 
 The refined operator and care manual for daily studio work. For setup, deployment, and file layout, see `README.md`.
 
-## 1. First run
+## 1. Sign in
 
-1. Open the studio. The first screen asks for an admin username plus password, minimum 8 characters.
-2. The studio unlocks immediately after creation. Later visits ask for login.
+1. Open the studio on any device. The first screen is the login form; there is no set-password step.
+2. Enter the studio username and the password held in the online database.
 3. The unlock dies with the tab. Closing the tab always asks for login again. Ten quiet minutes lock it too.
 
 ## 2. From enquiry to paid invoice
@@ -58,11 +58,12 @@ The refined operator and care manual for daily studio work. For setup, deploymen
 4. Plain export exists for inspection and migration, and it always asks for confirmation because the contents are readable.
 5. After restore, glance at counts on the dashboard before continuing work. The studio recomputes invoice arithmetic on its own and warns when a figure fails.
 
-## 8. Lock management
+## 8. Password management
 
-1. Change the password from Settings whenever team access changes.
-2. Remove the lock only on a private device that nobody else touches.
+1. Change the password from Settings whenever team access changes. The change is written to the online database and applies to every device.
+2. The lock cannot be removed from the client. Login is always required.
 3. On shared machines, use the Lock nav item before walking away. The idle timer is a safety net, not a substitute.
+4. Five wrong tries start a growing wait enforced by the server, so it applies across devices and survives reloads.
 
 ## 9. PII and retention practice
 

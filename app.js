@@ -136,6 +136,9 @@ store.load();
 const S = store.data;
 let route = { view: "dashboard", id: null };
 let draft = null;
+let authReady = false;
+let authUser = "";
+let authError = "";
 
 /* Default studio account — every invoice can choose its own. */
 const OFFICIAL = {
@@ -860,16 +863,13 @@ function vSettings() {
       <button class="btn btn-ghost" data-act="backup">Plain backup</button>
       <button class="btn btn-ghost" data-act="restore">Restore backup</button>
       <input type="file" id="restore-file" accept="application/json,.json" style="display:none"></p></div>
-    <div class="card no-print mt" style="max-width:640px"><h3>Contract login ${S.settings.lockHash ? "(on)" : "(off)"}</h3>
-      <p style="font-size:.85rem;color:var(--stone)">Password-gate this studio on shared devices. Stored as a hash, never plain text.</p>
+    <div class="card no-print mt" style="max-width:640px"><h3>Contract login (online database)</h3>
+      <p style="font-size:.85rem;color:var(--stone)">The password is verified against the online studio database and stored only as a hash, never plain text. It works on every device.</p>
       <div class="formgrid mt">
-        <label class="f">Username<input id="set-adminuser" value="${esc(S.settings.adminUser || "")}" autocomplete="username"></label>
-        <span></span>
         <label class="f">New password<input id="set-pass" type="password" autocomplete="new-password"></label>
         <label class="f">Confirm<input id="set-pass2" type="password" autocomplete="new-password"></label>
       </div>
-      <p class="mt"><button class="btn btn-primary" data-act="save-lock">Set password</button>
-      ${S.settings.lockHash ? `<button class="btn btn-danger" data-act="remove-lock">Remove lock</button>` : ""}</p></div>`;
+      <p class="mt"><button class="btn btn-primary" data-act="save-lock">Change password</button></p></div>`;
 }
 
 /* ---------- signature pads ---------- */
@@ -887,15 +887,19 @@ function pad(id) {
 let padD = null, padC = null;
 
 /* ---------- render + events ---------- */
-const isLocked = () => !!S.settings.lockHash && sessionStorage.getItem("mjb-unlocked") !== "1";
-const needsSetup = () => !S.settings.lockHash;
-function lockNow() { sessionStorage.removeItem("mjb-unlocked"); route = { view: "dashboard", id: null }; render(); }
+const AUTH_API = "api/auth.php";
+const isLocked = () => authReady && !!S.settings.lockHash && sessionStorage.getItem("mjb-unlocked") !== "1";
+function lockNow() {
+  sessionStorage.removeItem("mjb-unlocked");
+  fetch(AUTH_API + "?action=logout", { method: "POST", credentials: "include" }).catch(() => {});
+  route = { view: "dashboard", id: null }; render();
+}
 function render() {
   const app = $("#app");
   const side = document.querySelector(".sidebar");
-  if (needsSetup()) {
+  if (!authReady) {
     if (side) side.style.display = "none";
-    app.innerHTML = vSetup(); window.scrollTo(0, 0); return;
+    app.innerHTML = vBoot(); window.scrollTo(0, 0); return;
   }
   if (isLocked()) {
     if (side) side.style.display = "none";
@@ -1112,7 +1116,6 @@ document.addEventListener("click", async (e) => {
   else if (act === "save-settings") {
     S.settings.designer = $("#set-designer").value; S.settings.email = $("#set-email").value;
     S.settings.social = $("#set-social").value; S.settings.wm1 = $("#set-wm1").value; S.settings.wm2 = $("#set-wm2").value;
-    if ($("#set-adminuser")) S.settings.adminUser = $("#set-adminuser").value.trim() || "mrjamesbrandltd";
     store.save(); alert("Settings saved."); route = { view: "dashboard", id: null }; render();
   }
   else if (act === "verify-sums") {
@@ -1247,12 +1250,17 @@ document.addEventListener("click", async (e) => {
     const a = $("#set-pass").value, b2 = $("#set-pass2").value;
     if (!a || a.length < 8) { alert("Password needs at least 8 characters."); return; }
     if (a !== b2) { alert("Passwords do not match."); return; }
-    S.settings.lockHash = await sha(a); store.save();
-    $("#set-pass").value = ""; $("#set-pass2").value = "";
-    toast("Contract lock is on."); render();
-  }
-  else if (act === "remove-lock") {
-    if (confirm("Remove the admin lock?")) { S.settings.lockHash = ""; store.save(); render(); }
+    try {
+      const res = await fetch(AUTH_API + "?action=change-password", {
+        method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: a }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok || !d.ok) throw new Error(d.error || "Could not change the password.");
+      $("#set-pass").value = ""; $("#set-pass2").value = "";
+      toast("Password changed in the online database."); render();
+    } catch (e) { alert(e.message || "Could not change the password."); }
   }
 });
 
@@ -1279,57 +1287,74 @@ function syncForm() {
   if (tf) tf.value = money(totals(draft).total, draft.money.currency);
 }
 function toast(m) { let t = $("#toast"); if (!t) { t = document.createElement("div"); t.id = "toast"; document.body.appendChild(t); } t.textContent = m; t.className = "show"; clearTimeout(t._h); t._h = setTimeout(() => (t.className = ""), 2200); }
+function vBoot() {
+  return `<div style="min-height:80vh;display:flex;align-items:center;justify-content:center">
+    <div class="card" style="width:100%;max-width:380px">
+      <p class="eyebrow">Contract Studio</p>
+      <h1 class="page-title" style="font-size:2rem">Checking <span class="hl">access</span></h1>
+      <p style="font-size:.85rem;color:var(--stone)">Contacting the studio database...</p>
+    </div></div>`;
+}
 function vLock() {
   return `<div style="min-height:80vh;display:flex;align-items:center;justify-content:center">
     <form id="lockform" class="card" style="width:100%;max-width:380px">
 
       <p class="eyebrow">Restricted</p><h1 class="page-title" style="font-size:2.2rem;white-space:nowrap">Contract <span class="hl">login</span></h1>
-      <div id="lockerr"></div>
-      <label class="f mt">Username<input id="lockuser" autocomplete="username" value="mrjamesbrandltd"></label>
+      <div id="lockerr">${authError ? `<div class="alert">${esc(authError)}</div>` : ""}</div>
+      <label class="f mt">Username<input id="lockuser" autocomplete="username" value="${esc(authUser || S.settings.adminUser || "mrjamesbrandltd")}"></label>
       <label class="f mt">Password<input id="lockpass" type="password" autocomplete="current-password"></label>
       <p class="mt"><button class="btn btn-primary" type="submit" style="width:100%">Unlock</button></p>
     </form></div>`;
 }
-async function sha(s) {
+async function initAuth() {
   try {
-    const b = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("mjb:" + s));
-    return "s256:" + Array.from(new Uint8Array(b)).map((x) => x.toString(16).padStart(2, "0")).join("");
-  } catch (e) { let h = 5381; const str = "mjb:" + s; for (let i = 0; i < str.length; i++) h = (((h << 5) + h + str.charCodeAt(i)) | 0); return "dj2:" + (h >>> 0).toString(16); }
-}
-async function tryUnlock() {
-  let a = { n: 0, until: 0 };
-  try { a = Object.assign(a, JSON.parse(localStorage.getItem("mjb-lock-attempts"))); } catch (e) {}
-  const now = Date.now();
-  if (now < a.until) { const er = $("#lockerr"); if (er) er.innerHTML = `<div class="alert">Too many tries. Wait ${Math.ceil((a.until - now) / 1000)}s.</div>`; return; }
-  const u = $("#lockuser").value.trim().toLowerCase(), v = $("#lockpass").value;
-  if (u === String(S.settings.adminUser || "").toLowerCase() && (await sha(v)) === S.settings.lockHash) {
-    try { localStorage.setItem("mjb-lock-attempts", JSON.stringify({ n: 0, until: 0 })); } catch (e) {}
-    sessionStorage.setItem("mjb-unlocked", "1"); poke(); render(); toast("Welcome back.");
-  } else {
-    a.n++; a.until = a.n >= 5 ? now + Math.min(30000 * Math.pow(2, a.n - 5), 900000) : 0;
-    try { localStorage.setItem("mjb-lock-attempts", JSON.stringify(a)); } catch (e) {}
-    const er = $("#lockerr"); if (er) er.innerHTML = `<div class="alert">Wrong username or password.${a.until > now ? ` Locked ${Math.ceil((a.until - now) / 1000)}s.` : ""}</div>`;
+    const res = await fetch(AUTH_API + "?action=status", { credentials: "include", cache: "no-store" });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(d.error || "Studio database unavailable.");
+    authUser = d.user || "";
+    authError = d.configured ? "" : "Studio account not provisioned.";
+    if (authUser) S.settings.adminUser = authUser;
+    S.settings.lockHash = "server";
+  } catch (e) {
+    authError = e.message || "Cannot reach the studio database.";
+    S.settings.lockHash = "server";
+  } finally {
+    authReady = true;
+    render();
   }
 }
-function vSetup() {
-  return `<div style="min-height:80vh;display:flex;align-items:center;justify-content:center">
-    <form id="setupform" class="card" style="width:100%;max-width:380px">
-      <p class="eyebrow">First run</p><h1 class="page-title">Set admin <span class="hl">password</span></h1>
-      <p style="font-size:.85rem;color:var(--stone)">No password ships with the studio. Create one now — it stays only in this browser.</p>
-      <div id="lockerr"></div>
-      <label class="f mt">Username<input id="lockuser" autocomplete="username" value="${esc(S.settings.adminUser || "mrjamesbrandltd")}"></label>
-      <label class="f mt">New password<input id="lockpass" type="password" autocomplete="new-password"></label>
-      <label class="f mt">Confirm<input id="lockpass2" type="password" autocomplete="new-password"></label>
-      <p class="mt"><button class="btn btn-primary" type="submit" style="width:100%">Create password</button></p>
-    </form></div>`;
-}
-async function trySetup() {
-  const u = $("#lockuser").value.trim() || "mrjamesbrandltd", a = $("#lockpass").value, b = $("#lockpass2").value;
+async function tryUnlock() {
   const er = $("#lockerr");
-  if (!a || a.length < 8) { if (er) er.innerHTML = `<div class="alert">Password needs at least 8 characters.</div>`; return; }
-  if (a !== b) { if (er) er.innerHTML = `<div class="alert">Passwords do not match.</div>`; return; }
-  S.settings.adminUser = u; S.settings.lockHash = await sha(a); store.save();
-  sessionStorage.setItem("mjb-unlocked", "1"); poke(); render(); toast("Password created.");
+  const u = ($("#lockuser").value || "").trim().toLowerCase();
+  const v = $("#lockpass").value;
+  if (!u || !v) { if (er) er.innerHTML = `<div class="alert">Enter your username and password.</div>`; return; }
+  const btn = $("#lockform button[type=submit]");
+  if (btn) btn.disabled = true;
+  try {
+    const res = await fetch(AUTH_API + "?action=login", {
+      method: "POST", credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: u, password: v }),
+    });
+    const d = await res.json().catch(() => ({}));
+    if (res.ok && d.ok) {
+      sessionStorage.setItem("mjb-unlocked", "1");
+      if (d.user) { S.settings.adminUser = d.user; authUser = d.user; }
+      poke(); render(); toast("Welcome back.");
+      return;
+    }
+    if (res.status === 429 || Number(d.retryAfter) > 0) {
+      if (er) er.innerHTML = `<div class="alert">Too many tries. Wait ${Math.ceil(Number(d.retryAfter) || 30)}s.</div>`;
+    } else if (res.status === 401) {
+      if (er) er.innerHTML = `<div class="alert">Wrong username or password.</div>`;
+    } else {
+      if (er) er.innerHTML = `<div class="alert">${esc(d.error || "Login failed.")}</div>`;
+    }
+  } catch (e) {
+    if (er) er.innerHTML = `<div class="alert">Cannot reach the studio database. Try again.</div>`;
+  } finally {
+    if (btn) btn.disabled = false;
+  }
 }
 /* Idle auto-lock: 10 min without input. (Hidden tabs go quiet too, so the
    idle timer already covers them — no separate instant lock on tab switch.) */
@@ -1337,12 +1362,11 @@ let lastAct = Date.now();
 function poke() { lastAct = Date.now(); }
 ["click", "input", "keydown", "touchstart"].forEach((ev) => document.addEventListener(ev, poke, { passive: true }));
 setInterval(() => {
-  if (!S.settings.lockHash || isLocked() || needsSetup()) return;
+  if (!S.settings.lockHash || isLocked()) return;
   if (Date.now() - lastAct > 10 * 60 * 1000) lockNow();
 }, 30000);
 document.addEventListener("submit", (e) => {
   if (e.target.id === "lockform") { e.preventDefault(); tryUnlock(); }
-  else if (e.target.id === "setupform") { e.preventDefault(); trySetup(); }
 });
 document.addEventListener("focusout", (e) => {
   if (route.view !== "editor" || !draft) return;
@@ -1593,4 +1617,5 @@ addEventListener("beforeprint", () => {
 addEventListener("afterprint", () => { document.title = "Contracts · MRJAMESBRAND LTD"; });
 
 render();
+initAuth();
 
