@@ -6,6 +6,8 @@ const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
 const uid = () => Math.random().toString(36).slice(2, 10);
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const money = (n, c) => new Intl.NumberFormat("en-NG", { style: "currency", currency: c || "USD", maximumFractionDigits: 0 }).format(Number(n) || 0);
+const moneyVat = (n, c) => new Intl.NumberFormat("en-NG", { style: "currency", currency: c || "USD", minimumFractionDigits: 2 }).format(Number(n) || 0);
+const fmtLongDate = (iso) => { if (!iso) return ""; const d = new Date(iso + "T00:00:00"); return isNaN(d) ? iso : d.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }); };
 /* Subtotal + VAT + deposit/balance. Old contracts without vatPct default to 7.5%. */
 function totals(c) {
   const sub = Math.round(Number(c.money.quote) || 0);
@@ -16,6 +18,8 @@ function totals(c) {
   return { sub, pct, vat, total, dep, bal: total - dep };
 }
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m]));
+/* Cropped from Artboard 1: monogram only, tight viewBox, inherits colour. */
+const MONOGRAM = `<svg class="monogram" viewBox="319.45 362.72 616.02 284.32" fill="currentColor" aria-hidden="true" focusable="false"><polygon points="319.45 457.49 319.45 647.04 428.44 647.04 428.44 457.49 428.44 457.49 319.45 457.49"/><polygon points="494.78 362.72 428.44 457.49 584.81 457.49 584.81 647.04 693.8 647.04 693.8 457.49 627.46 362.72 494.78 362.72"/><polygon points="892.82 362.72 760.14 362.72 693.8 457.49 826.48 457.49 826.48 647.04 935.47 647.04 935.47 443.28 892.82 362.72"/></svg>`;
 
 function newFromTemplate(tpl) {
   const c = blankContract();
@@ -43,7 +47,7 @@ function blankContract() {
 }
 
 const store = {
-  data: { contracts: [], invoices: [], templates: [], clients: [], clientSeq: 1, appliedCodes: {}, hiddenTemplates: [], coupons: [], settings: { designer: "MrJamesBrand Ltd", email: "hello@mrjamesbrandltd.com", social: "@mrjamesbrand", wm1: "Western Union cash pickup", wm2: "World Remit transfer", adminUser: "mrjamesbrandltd", lockHash: "" } },
+  data: { contracts: [], invoices: [], templates: [], clients: [], clientSeq: 1, appliedCodes: {}, hiddenTemplates: [], coupons: [], settings: { designer: "MrJamesBrand Ltd", email: "info@mrjamesbrandltd.com", social: "@mrjamesbrand", wm1: "Western Union cash pickup", wm2: "World Remit transfer", adminUser: "mrjamesbrandltd", lockHash: "" } },
   load() {
     try { const d = JSON.parse(localStorage.getItem(KEY)); if (d && d.contracts) this.data = Object.assign(this.data, d); } catch (e) {}
     this.data.settings = Object.assign({ adminUser: "mrjamesbrandltd", lockHash: "" }, this.data.settings);
@@ -75,6 +79,16 @@ const store = {
       if (c.client && (c.client.id || c.client.name)) ensureRec(c.client.id, c.client.name, c.client.business, c.client.email, c.client.phone);
     }
     for (const i of this.data.invoices) if (i.clientId || i.clientName) ensureRec(i.clientId, i.clientName, "", i.clientEmail, "");
+    /* one-year service term: normalise older invoices */
+    for (const i of this.data.invoices) {
+      for (const it of i.items || []) {
+        const name = String(it.name || "");
+        const desc = String(it.desc || "");
+        const nextName = name.replace(/Two Years/g, "One Year");
+        const nextDesc = desc.replace(/two years/g, "one year").replace(/remains accessible/g, "is accessible");
+        if (nextName !== name || nextDesc !== desc) { it.name = nextName; it.desc = nextDesc; touched = true; }
+      }
+    }
     let maxSeq = this.data.clientSeq || 1;
     this.data.clients.forEach((r) => { const m = String(r.id || "").match(/(\d+)\s*$/); if (m) maxSeq = Math.max(maxSeq, Number(m[1]) + 1); });
     if (maxSeq !== this.data.clientSeq) { this.data.clientSeq = maxSeq; touched = true; }
@@ -123,11 +137,9 @@ const S = store.data;
 let route = { view: "dashboard", id: null };
 let draft = null;
 
-/* Official studio accounts — constant on every invoice (mirrors mrjamesbrand repo). */
+/* Default studio account — every invoice can choose its own. */
 const OFFICIAL = {
-  zenith: { bank: "Zenith Bank", name: "MRJAMESBRAND LIMITED", number: "1229578097" },
-  kuda: { bank: "Kuda MFB", name: "MRJAMESBRAND LTD", number: "3004035777" },
-  finance: "finance@mrjamesbrandltd.com"
+  zenith: { bank: "Zenith Bank", name: "MRJAMESBRAND LIMITED", number: "1229578097" }
 };
 
 /* ---------- fixed legal text (from contract template) ---------- */
@@ -252,31 +264,88 @@ function docHTML(c, ed) {
 }
 
 function invoiceHTML(inv) {
-  const c = S.contracts.find((x) => x.id === inv.contractId) || {};
   const sum = inv.items.reduce((s, i) => s + i.qty * i.price, 0);
   const hasVat = inv.subtotal !== undefined;
   const vSub = hasVat ? inv.subtotal : sum, vVat = hasVat ? inv.vat : 0;
-  return `<div class="doc"><div class="doc-page">
-    <div class="inv-head"><div class="inv-brand">${S.settings.logo ? `<img class="inv-logo" src="${S.settings.logo}" alt="studio logo">` : `<span class="inv-mark">MJB</span>`}
-      <span><strong>MRJAMESBRAND LTD</strong><br>${esc(S.settings.email)}</span></div>
-      <div style="text-align:right"><h2 style="font-size:2.2rem">INVOICE</h2><p>${esc(inv.ref)} · ${esc(inv.createdAt)}</p>
-      <span class="badge b-${inv.status.toLowerCase()}">${inv.status}</span></div></div>
-    <div class="grid2"><div><h4>Bill To</h4><p>${esc(inv.clientName)}<br>${esc(inv.clientEmail)}${inv.clientId ? `<br>Client ID: ${esc(inv.clientId)}` : ""}</p></div>
-      <div><h4>Contract</h4><p>${esc(c.ref || "")} · ${esc((c.project || {}).name || "")}<br>Due: ${esc(inv.dueAt || "")}</p></div></div>
-    <table class="doc-table mt"><tr><th>Item</th><th>Qty</th><th>Price</th><th>Amount</th></tr>
-      ${inv.items.map((i) => `<tr><td><strong>${esc(i.name)}</strong><br>${esc(i.desc || "")}</td><td>${i.qty}</td><td>${money(i.price, inv.currency)}</td><td>${money(i.qty * i.price, inv.currency)}</td></tr>`).join("")}
+  const acct = { bank: inv.accountBank || OFFICIAL.zenith.bank, name: inv.accountName || OFFICIAL.zenith.name, number: inv.accountNumber || OFFICIAL.zenith.number };
+  return `<div class="doc doc-invoice"><div class="doc-page">
+    <div class="inv-head"><div class="inv-brand">${S.settings.logo ? `<img class="inv-logo" src="${S.settings.logo}" alt="studio logo">` : ""}
+      <span class="inv-id"><strong>MRJAMESBRAND</strong><small>LTD · STRATEGY · BRAND · DIGITAL</small><span class="inv-email">Email: ${esc(S.settings.email)}</span></span></div>
+      <div class="inv-meta"><h2>INVOICE</h2>
+        <p class="inv-ref"><span>Invoice Number</span> ${esc(inv.ref)}</p>
+        <p class="inv-date"><span>Invoice Date</span> ${fmtLongDate(inv.createdAt)}</p>
+        <p class="inv-due"><span>Due Date</span> ${fmtLongDate(inv.dueAt) || "On receipt"}</p>
+        <span class="badge b-${inv.status.toLowerCase()}">${inv.status}</span></div></div>
+    <div class="inv-bill"><h4>Bill To</h4><p><strong>Client Name:</strong> ${esc(inv.clientName)}${inv.clientEmail ? `<br><strong>Client Email:</strong> ${esc(inv.clientEmail)}` : ""}${inv.clientId ? `<br><strong>Client ID:</strong> ${esc(inv.clientId)}` : ""}</p></div>
+    ${inv.project ? `<div class="inv-project"><h4>Project Description</h4><p>${esc(inv.project)}</p></div>` : ""}
+    <table class="doc-table mt"><tr><th>S/N</th><th>Service Description</th><th>Amount</th></tr>
+      ${inv.items.map((i, idx) => `<tr><td>${idx + 1}</td><td><strong>${esc(i.name)}${i.desc ? ":" : ""}</strong>${i.desc ? `<span class="line-desc">${esc(i.desc)}</span>` : ""}</td><td>${money(i.qty * i.price, inv.currency)}</td></tr>`).join("")}
     </table>
-    ${hasVat ? `<p style="text-align:right">Subtotal: ${money(vSub, inv.currency)}<br>${inv.disc > 0 ? `Discount (${inv.discPct}%): −${money(inv.disc, inv.currency)}<br>` : ""}${inv.coupon && inv.coupon.amount > 0 ? `Coupon ${esc(inv.coupon.code)}: −${money(inv.coupon.amount, inv.currency)}<br>` : ""}${inv.vat > 0 ? `VAT (${inv.vatPct}%): ${money(vVat, inv.currency)}` : `No VAT charged.`}</p>` : ""}
-    <div class="inv-total"><span>TOTAL</span><span>${money(invTotal(inv), inv.currency)}</span></div>
+    ${hasVat ? `<div class="inv-sums">
+      <p><span>Subtotal</span><span>${money(vSub, inv.currency)}</span></p>
+      ${inv.disc > 0 ? `<p><span>Discount (${inv.discPct}%)</span><span>−${money(inv.disc, inv.currency)}</span></p>` : ""}
+      ${inv.coupon && inv.coupon.amount > 0 ? `<p><span>Coupon ${esc(inv.coupon.code)}</span><span>−${money(inv.coupon.amount, inv.currency)}</span></p>` : ""}
+      ${vVat > 0 ? `<p><span>VAT${inv.vat > 0 ? ` (${inv.vatPct}%)` : ""}</span><span>${moneyVat(vVat, inv.currency)}</span></p>` : ""}
+    </div>` : ""}
+    <div class="inv-total"><span>TOTAL AMOUNT DUE</span><span>${money(invTotal(inv), inv.currency)}</span></div>
     ${inv.notes ? `<p class="mt"><strong>Notes:</strong> ${esc(inv.notes)}</p>` : ""}
-    <div class="doc-beige"><h4>Pay To: Official Studio Accounts</h4>
-      <table class="doc-table"><tr><th>Bank</th><th>Account Name</th><th>Account Number</th></tr>
-        <tr><td>${OFFICIAL.zenith.bank}</td><td>${OFFICIAL.zenith.name}</td><td>${OFFICIAL.zenith.number}</td></tr>
-        <tr><td>${OFFICIAL.kuda.bank}</td><td>${OFFICIAL.kuda.name}</td><td>${OFFICIAL.kuda.number}</td></tr></table>
-      <p>Use ${esc(inv.ref)} as payment narration. Send proof of payment to ${OFFICIAL.finance}.</p></div>
-    <p class="mt">Pay to secure / release files per contract terms. Send proof of payment to ${esc(S.settings.email)}.</p>
-    <div class="doc-foot"><span>MRJAMESBRAND LTD</span></div>
+    <div class="doc-beige"><h4>Payment Details</h4>
+      <div class="pay-grid">
+        <div><strong>${esc(acct.bank)}</strong><p>Account Name: ${esc(acct.name)}<br>Account Number: ${esc(acct.number)}</p></div>
+      </div>
+      <p class="pay-thanks">Thank you for choosing MRJAMESBRAND LTD.</p>
+      <p class="pay-tag">We help businesses communicate clearly, build credibility and grow through intentional design and digital solutions.</p></div>
+    <div class="doc-foot"><span>MRJAMESBRAND LTD</span><span>STRATEGY · BRAND · DIGITAL</span></div>
   </div></div>`;
+}
+
+/* Standalone invoice document: 816×1056 px (US Letter at 96dpi), no contract terms. */
+function appCSS() {
+  let css = "";
+  for (const sheet of document.styleSheets) {
+    try { for (const rule of sheet.cssRules) css += rule.cssText + "\n"; } catch (_) {}
+  }
+  return css;
+}
+function invoiceDocHTML(inv) {
+  return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Invoice ${esc(inv.ref)} · MRJAMESBRAND LTD</title><style>${appCSS()}</style><style>
+body{margin:0;background:#000}
+.doc-invoice{width:816px;max-width:none;margin:24px auto;border:0;overflow:visible}
+.doc-invoice .doc-page{width:816px;min-height:1056px;padding:28px 52px;box-sizing:border-box;display:flex;flex-direction:column}
+.doc-invoice .doc-foot{margin-top:auto}
+@page{size:8.5in 11in;margin:0}
+@media print{body{background:#fff}.doc-invoice{margin:0}.doc-invoice .doc-page{width:816px;min-height:1056px}}
+</style></head><body>${invoiceHTML(inv)}</body></html>`;
+}
+function previewInvoice(inv) {
+  const w = window.open("", "_blank");
+  if (!w) { alert("Allow pop-ups to preview the invoice."); return; }
+  w.document.open(); w.document.write(invoiceDocHTML(inv)); w.document.close();
+}
+function shareInvoice(inv) {
+  download(`invoice-${inv.ref}.html`, invoiceDocHTML(inv), "text/html");
+  toast("Invoice downloaded — send it on its own.");
+}
+function printInvoice() {
+  const st = document.createElement("style");
+  st.textContent = "@page{size:8.5in 11in;margin:0}";
+  document.head.appendChild(st);
+  addEventListener("afterprint", () => st.remove(), { once: true });
+  window.print();
+}
+function draftToInvoice(d) {
+  const t = invTotals(d);
+  const items = d.items.filter((i) => i.name && Number(i.price) > 0)
+    .map((i) => ({ name: i.name, desc: i.desc || "", qty: Number(i.qty) || 0, price: Number(i.price) || 0 }));
+  const existing = d._editId ? S.invoices.find((x) => x.id === d._editId) : null;
+  return { ref: existing ? existing.ref : "PREVIEW", createdAt: existing ? existing.createdAt : todayISO(),
+    status: existing ? existing.status : "SENT", clientName: d.clientName, clientEmail: d.clientEmail,
+    clientId: existing ? existing.clientId : "", currency: d.currency, dueAt: d.dueAt, notes: d.notes,
+    project: d.project || "",
+    accountBank: d.accountBank || OFFICIAL.zenith.bank, accountName: d.accountName || OFFICIAL.zenith.name, accountNumber: d.accountNumber || OFFICIAL.zenith.number,
+    items, subtotal: t.sub, vat: t.vat, vatPct: t.pct, disc: t.disc, discPct: t.dpct,
+    coupon: d.coupon ? { code: t.couponCode, amount: t.couponAmt } : null };
 }
 
 /* ---------- views ---------- */
@@ -542,33 +611,50 @@ function vInvoices() {
       ${inv.map((i) => `<tr><td><strong>${esc(i.ref)}</strong></td><td>${esc(i.clientName)}</td>
         <td class="money">${money(invTotal(i), i.currency)}</td>
         <td>${invBadge(i)}</td><td>${esc(i.dueAt || "")}</td>
-        <td><div class="rowactions"><button data-act="open-inv" data-id="${i.id}">Open</button></div></td></tr>`).join("")}
+        <td><div class="rowactions"><button data-act="open-inv" data-id="${i.id}">Open</button>${i.status !== "PAID" ? `<button data-act="edit-inv" data-id="${i.id}">Edit</button>` : ""}</div></td></tr>`).join("")}
     </table></div>` : `<div class="card empty">No invoices yet. Sign a contract first, then raise one.</div>`}`;
 }
 
 function vInvoice(id) {
   const i = S.invoices.find((x) => x.id === id);
   if (!i) return `<div class="card empty">Not found.</div>`;
-  return `<p class="eyebrow">Invoice · ${esc(i.ref)} ${invBadge(i)}</p>
+  return `<div class="inv-view">
+    <p class="eyebrow no-print">Invoice · ${esc(i.ref)} ${invBadge(i)}</p>
     <div class="toolbar no-print">
+      ${i.status !== "PAID" ? `<button class="btn btn-ghost" data-act="edit-inv" data-id="${i.id}">Edit invoice</button>` : ""}
       ${i.status !== "PAID" ? `<button class="btn btn-lime" data-act="paid" data-id="${i.id}">Mark PAID</button>` : ""}
+      <button class="btn btn-ghost" data-act="preview-inv" data-id="${i.id}">Preview</button>
+      <button class="btn btn-ghost" data-act="share-inv" data-id="${i.id}">Share invoice</button>
       <span class="spacer"></span><button class="btn" data-act="print">Print / PDF</button>
     </div>
-    <div class="card no-print" style="max-width:640px;margin-bottom:16px"><h3>Payments received</h3>
+    <div class="card no-print" style="margin-bottom:16px"><h3>Payments received</h3>
       <div class="formgrid">
         <label class="f">Deposit<span style="display:flex;align-items:center;gap:10px;margin-top:6px;font-size:.9rem;font-weight:400;text-transform:none;letter-spacing:normal"><input type="checkbox" data-pay="depPaid"${i.depPaid ? " checked" : ""} style="width:22px;height:22px">${i.depPaid ? "Received" : "Awaiting"}</span></label>
         <label class="f">Balance<span style="display:flex;align-items:center;gap:10px;margin-top:6px;font-size:.9rem;font-weight:400;text-transform:none;letter-spacing:normal"><input type="checkbox" data-pay="balPaid"${i.balPaid ? " checked" : ""} style="width:22px;height:22px">${i.balPaid ? "Received" : "Awaiting"}</span></label>
-      </div></div>${i.status !== "PAID" ? `<div class="card no-print" style="max-width:640px;margin-bottom:16px"><h3>Coupon</h3>
+      </div></div>${i.status !== "PAID" ? `<div class="card no-print" style="margin-bottom:16px"><h3>Coupon</h3>
       ${i.coupon ? `<p>Coupon <strong>${esc(i.coupon.code)}</strong> (−${money(i.coupon.amount, i.currency)}) <button class="btn btn-ghost" data-act="remove-coupon" data-id="${i.id}">Remove</button></p>`
-        : `<div class="deliverable-row"><input id="coupon-code" placeholder="Coupon code" style="text-transform:uppercase"><button data-act="apply-coupon" data-id="${i.id}">Apply</button></div><div id="coupon-err"></div>`}</div>` : ""}${invoiceHTML(i)}`;
+        : `<div class="deliverable-row"><input id="coupon-code" placeholder="Coupon code" style="text-transform:uppercase"><button data-act="apply-coupon" data-id="${i.id}">Apply</button></div><div id="coupon-err"></div>`}</div>` : ""}${invoiceHTML(i)}</div>`;
 }
 
 /* ---------- standalone invoice builder ---------- */
 let draftInv = null;
 function blankInv() {
   return { clientName: "", clientEmail: "", currency: "USD", vatPct: 7.5, discPct: 0, noVat: false, coupon: null,
-    dueAt: new Date(Date.now() + 14 * 864e5).toISOString().slice(0, 10),
+    project: "", dueAt: new Date(Date.now() + 14 * 864e5).toISOString().slice(0, 10),
+    accountBank: OFFICIAL.zenith.bank, accountName: OFFICIAL.zenith.name, accountNumber: OFFICIAL.zenith.number,
     notes: "", contractId: "", items: [{ name: "", desc: "", qty: 1, price: 0 }] };
+}
+/* load an existing invoice into the builder without touching the stored copy until Save */
+function invToDraft(i) {
+  return { _editId: i.id,
+    clientName: i.clientName || "", clientEmail: i.clientEmail || "",
+    currency: i.currency || "USD", vatPct: i.vatPct !== undefined ? i.vatPct : 7.5,
+    discPct: i.discPct || 0, noVat: !!i.noVat,
+    coupon: i.coupon ? { code: i.coupon.code, kind: i.coupon.kind, value: i.coupon.value } : null,
+    dueAt: i.dueAt || "", notes: i.notes || "", contractId: i.contractId || "",
+    project: i.project || "",
+    accountBank: i.accountBank || OFFICIAL.zenith.bank, accountName: i.accountName || OFFICIAL.zenith.name, accountNumber: i.accountNumber || OFFICIAL.zenith.number,
+    items: (i.items || []).map((x) => ({ name: x.name, desc: x.desc, qty: x.qty, price: x.price })) };
 }
 function invTotals(d) {
   const sub = d.items.reduce((s, i) => s + (Number(i.qty) || 0) * (Number(i.price) || 0), 0);
@@ -589,8 +675,8 @@ function invTotal(i) {
   const sub = i.subtotal !== undefined ? i.subtotal : s;
   return sub - (i.disc || 0) - ((i.coupon && i.coupon.amount) || 0) + (i.vat || 0);
 }
-/* validate a typed code against the coupon book */
-function resolveCoupon(raw) {
+/* validate a typed code against the coupon book; selfRef lets an invoice keep its own coupon while editing */
+function resolveCoupon(raw, selfRef) {
   const code = String(raw || "").trim().toUpperCase();
   if (!code) return { ok: false, msg: "Type a coupon code first." };
   const c = S.coupons.find((x) => String(x.code).toUpperCase() === code);
@@ -599,7 +685,7 @@ function resolveCoupon(raw) {
   if (!(Number(c.value) > 0)) return { ok: false, msg: `Coupon ${code} has no value.` };
   if (c.kind === "percent" && Number(c.value) > 100) return { ok: false, msg: `Coupon ${code} is over 100 percent.` };
   if (c.expires && c.expires < todayISO()) return { ok: false, msg: `Coupon ${code} expired on ${c.expires}.` };
-  if (c.used && c.used.invoiceRef) return { ok: false, msg: `Coupon ${code} was already used on invoice ${c.used.invoiceRef}.` };
+  if (c.used && c.used.invoiceRef && c.used.invoiceRef !== selfRef) return { ok: false, msg: `Coupon ${code} was already used on invoice ${c.used.invoiceRef}.` };
   return { ok: true, coupon: { code: c.code, kind: c.kind, value: Number(c.value) } };
 }
 /* single use ledger: who spent the coupon, on which service and invoice */
@@ -625,11 +711,13 @@ function invTotalsHTML(d) {
 }
 function vInvEditor() {
   const d = draftInv;
-  return `<p class="eyebrow">Admin · new invoice ${d.contractId ? "(linked)" : "(standalone)"}</p>
-    <h1 class="page-title">New <span class="hl">invoice</span></h1>
+  const editing = !!d._editId;
+  return `<p class="eyebrow">Admin · ${editing ? "edit invoice" : "new invoice"} ${d.contractId ? "(linked)" : "(standalone)"}</p>
+    <h1 class="page-title">${editing ? "Edit" : "New"} <span class="hl">invoice</span></h1>
     <div class="toolbar no-print">
-      <button class="btn btn-primary" data-act="save-inv">Save invoice</button>
+      <button class="btn btn-primary" data-act="save-inv">${editing ? "Save changes" : "Save invoice"}</button>
       <button class="btn btn-ghost" data-act="cancel-inv">Cancel</button>
+      <button class="btn btn-ghost" data-act="preview-inv-draft">Preview</button>
     </div><div id="err"></div>
     <div class="card no-print" style="max-width:760px">
       <h3>Bill To</h3><div class="formgrid">
@@ -642,7 +730,14 @@ function vInvEditor() {
         <label class="f">Due date<input type="date" data-if="dueAt" value="${esc(d.dueAt)}"></label>
         <label class="f">Link contract (optional)<select data-if="contractId"><option value="">Standalone (no contract)</option>
           ${S.contracts.map((c) => `<option value="${c.id}"${d.contractId === c.id ? " selected" : ""}>${esc(c.ref)} · ${esc(c.project.name)}</option>`).join("")}</select></label>
+        <label class="f full">Project description<input data-if="project" value="${esc(d.project || "")}" placeholder="e.g. Website Development, Business Branding and Digital Setup"></label>
         <label class="f full">Notes<textarea data-if="notes">${esc(d.notes)}</textarea></label>
+      </div>
+      <h3 class="mt">Payment account <span style="font-weight:400;font-size:.8rem;color:var(--stone)">choose where this invoice should be paid</span></h3>
+      <div class="formgrid">
+        <label class="f">Bank<input data-if="accountBank" value="${esc(d.accountBank || OFFICIAL.zenith.bank)}"></label>
+        <label class="f">Account name<input data-if="accountName" value="${esc(d.accountName || OFFICIAL.zenith.name)}"></label>
+        <label class="f">Account number<input data-if="accountNumber" value="${esc(d.accountNumber || OFFICIAL.zenith.number)}"></label>
       </div>
       <h3 class="mt">Services <span style="font-weight:400;font-size:.8rem;color:var(--stone)">name, description and cost per line</span></h3>
       <div id="iilist">
@@ -668,22 +763,44 @@ function persistInv() {
   if (!lines.length) { const er = $("#err"); if (er) er.innerHTML = `<div class="alert">Add at least one service line with a cost above zero.</div>`; return false; }
   const t = invTotals({ ...d, items: lines });
   const linked = d.contractId ? S.contracts.find((x) => x.id === d.contractId) : null;
-  const inv = { id: uid(), ref: "INV-MJB-" + new Date().getFullYear() + "-" + String(Math.floor(1000 + Math.random() * 9000)),
-    contractId: d.contractId || null, status: "SENT", currency: d.currency, createdAt: todayISO(), dueAt: d.dueAt || null,
-    clientName: d.clientName, clientEmail: d.clientEmail, notes: d.notes,
-    clientId: (linked && linked.client.id) || store.clientIdFor(d.clientName),
-    depPaid: false, balPaid: false,
-    subtotal: t.sub, vat: t.vat, vatPct: t.pct, disc: t.disc, discPct: t.dpct, noVat: !!d.noVat,
-    coupon: null,
-    items: lines.map((i) => ({ name: i.name, desc: i.desc, qty: Number(i.qty) || 1, price: Number(i.price) || 0 })) };
+  const existing = d._editId ? S.invoices.find((x) => x.id === d._editId) : null;
+  const prev = existing ? existing.coupon : null;
+  let nextCoupon = null;
   if (d.coupon) {
-    const live = resolveCoupon(d.coupon.code);
+    const same = prev && String(prev.code).toUpperCase() === String(d.coupon.code).toUpperCase();
+    /* keep an already-stamped coupon valid on its own invoice even if it later expired */
+    const live = same ? { ok: true, coupon: { code: prev.code, kind: prev.kind, value: prev.value } } : resolveCoupon(d.coupon.code, existing ? existing.ref : undefined);
     if (!live.ok || !(t.couponAmt > 0)) { const er = $("#err"); const msg = live.ok ? "This coupon changes nothing on this invoice." : live.msg; if (er) er.innerHTML = `<div class="alert">${esc(msg)}</div>`; else alert(msg); return false; }
-    inv.coupon = { code: live.coupon.code, kind: live.coupon.kind, value: live.coupon.value, amount: t.couponAmt };
-    stampCouponUse(inv, live.coupon);
+    nextCoupon = { code: live.coupon.code, kind: live.coupon.kind, value: live.coupon.value, amount: t.couponAmt };
   }
-  S.invoices.push(inv); store.save();
-  route = { view: "invoice", id: inv.id }; render(); toast("Invoice created.");
+  const inv = existing || { id: uid(), ref: "INV-MJB-" + new Date().getFullYear() + "-" + String(Math.floor(1000 + Math.random() * 9000)),
+    status: "SENT", createdAt: todayISO(), depPaid: false, balPaid: false, coupon: null };
+  inv.contractId = d.contractId || null;
+  inv.currency = d.currency;
+  inv.dueAt = d.dueAt || null;
+  inv.clientName = d.clientName;
+  inv.clientEmail = d.clientEmail;
+  inv.notes = d.notes;
+  inv.project = d.project || "";
+  inv.accountBank = d.accountBank || OFFICIAL.zenith.bank;
+  inv.accountName = d.accountName || OFFICIAL.zenith.name;
+  inv.accountNumber = d.accountNumber || OFFICIAL.zenith.number;
+  inv.clientId = (linked && linked.client.id) || inv.clientId || store.clientIdFor(d.clientName);
+  inv.noVat = !!d.noVat;
+  inv.subtotal = t.sub; inv.vat = t.vat; inv.vatPct = t.pct; inv.disc = t.disc; inv.discPct = t.dpct;
+  inv.items = lines.map((i) => ({ name: i.name, desc: i.desc, qty: Number(i.qty) || 1, price: Number(i.price) || 0 }));
+  if (nextCoupon) {
+    if (prev && prev.code !== nextCoupon.code) freeCouponUse(inv);
+    inv.coupon = nextCoupon;
+    stampCouponUse(inv, nextCoupon);
+  } else {
+    if (prev) freeCouponUse(inv);
+    inv.coupon = null;
+  }
+  if (!existing) S.invoices.push(inv);
+  store.save();
+  route = { view: "invoice", id: inv.id }; render();
+  toast(existing ? "Invoice updated." : "Invoice created.");
   return true;
 }
 
@@ -729,11 +846,10 @@ function vSettings() {
       <p class="mt"><button class="btn btn-ghost" data-act="logo-pick">Upload logo</button>
       ${S.settings.logo ? `<button class="btn btn-danger" data-act="logo-clear">Remove</button>` : ""}
       <input type="file" id="logo-file" accept="image/png,image/jpeg" style="display:none"></p></div>
-    <div class="card no-print mt" style="max-width:640px"><h3>Official Accounts (locked)</h3>
-      <p style="font-size:.85rem;color:var(--stone)">Printed on every invoice, identical each time. Matches the mrjamesbrand repo.</p>
+    <div class="card no-print mt" style="max-width:640px"><h3>Default payment account</h3>
+      <p style="font-size:.85rem;color:var(--stone)">Prefilled on new invoices. Each invoice can choose a different account.</p>
       <table class="list mt"><tr><th>Bank</th><th>Name</th><th>Number</th></tr>
-        <tr><td>${OFFICIAL.zenith.bank}</td><td>${OFFICIAL.zenith.name}</td><td class="money">${OFFICIAL.zenith.number}</td></tr>
-        <tr><td>${OFFICIAL.kuda.bank}</td><td>${OFFICIAL.kuda.name}</td><td class="money">${OFFICIAL.kuda.number}</td></tr></table></div>
+        <tr><td>${OFFICIAL.zenith.bank}</td><td>${OFFICIAL.zenith.name}</td><td class="money">${OFFICIAL.zenith.number}</td></tr></table></div>
     <div class="card no-print mt" style="max-width:640px"><h3>Arithmetic check</h3>
       <p style="font-size:.85rem;color:var(--stone)">Recomputes every invoice total from its lines. Runs on its own after each restore.</p>
       <div id="verify-out"></div>
@@ -856,7 +972,7 @@ document.addEventListener("click", async (e) => {
   const nav = e.target.closest(".navlink"); if (nav) { route = { view: nav.dataset.view, id: null }; render(); return; }
   const b = e.target.closest("[data-act]"); if (!b) return;
   const act = b.dataset.act, id = b.dataset.id;
-  if (act === "print") { window.print(); }
+  if (act === "print") { if (route.view === "invoice") printInvoice(); else window.print(); }
   else if (act === "new") { route = { view: "picker", id: null }; render(); }
   else if (act === "from-blank") { draft = newFromTemplate(null); route = { view: "editor", id: null }; render(); }
   else if (act === "from-tpl") { draft = newFromTemplate(S.templates.find((x) => x.id === id)); route = { view: "editor", id: null }; render(); }
@@ -942,8 +1058,21 @@ document.addEventListener("click", async (e) => {
     } catch (e) { alert("Invalid return code."); }
   }
   else if (act === "open-inv") { route = { view: "invoice", id }; render(); }
+  else if (act === "edit-inv") {
+    const i = S.invoices.find((x) => x.id === id); if (!i) return;
+    if (i.status === "PAID") { alert("Paid invoices cannot be edited. Uncheck the payments first if a correction is needed."); return; }
+    draftInv = invToDraft(i); route = { view: "invoice-edit", id }; render();
+  }
   else if (act === "new-inv") { draftInv = blankInv(); route = { view: "invoice-edit", id: null }; render(); }
-  else if (act === "cancel-inv") { draftInv = null; route = { view: "invoices", id: null }; render(); }
+  else if (act === "cancel-inv") { const back = draftInv && draftInv._editId; draftInv = null; route = back ? { view: "invoice", id: back } : { view: "invoices", id: null }; render(); }
+  else if (act === "preview-inv") { const i = S.invoices.find((x) => x.id === id); if (i) previewInvoice(i); }
+  else if (act === "share-inv") { const i = S.invoices.find((x) => x.id === id); if (i) shareInvoice(i); }
+  else if (act === "preview-inv-draft") {
+    if (!draftInv) return;
+    if (!draftInv.clientName) { alert("Add a client name first."); return; }
+    if (!draftInv.items.some((x) => x.name && Number(x.price) > 0)) { alert("Add at least one service line with a cost above zero."); return; }
+    previewInvoice(draftToInvoice(draftInv));
+  }
   else if (act === "add-ii") { if (draftInv) { draftInv.items.push({ name: "", desc: "", qty: 1, price: 0 }); render(); } }
   else if (act === "del-ii") { if (draftInv && draftInv.items.length > 1) { draftInv.items.splice(Number(b.dataset.i), 1); render(); } }
   else if (act === "save-inv") { if (draftInv) persistInv(); }
@@ -1153,7 +1282,7 @@ function toast(m) { let t = $("#toast"); if (!t) { t = document.createElement("d
 function vLock() {
   return `<div style="min-height:80vh;display:flex;align-items:center;justify-content:center">
     <form id="lockform" class="card" style="width:100%;max-width:380px">
-      ${S.settings.logo ? `<p style="margin:0 0 12px"><img src="${S.settings.logo}" alt="studio logo" style="max-height:56px;max-width:180px"></p>` : `<p class="eyebrow" style="margin:0 0 12px">MJB</p>`}
+
       <p class="eyebrow">Restricted</p><h1 class="page-title" style="font-size:2.2rem;white-space:nowrap">Contract <span class="hl">login</span></h1>
       <div id="lockerr"></div>
       <label class="f mt">Username<input id="lockuser" autocomplete="username" value="mrjamesbrandltd"></label>
@@ -1464,3 +1593,4 @@ addEventListener("beforeprint", () => {
 addEventListener("afterprint", () => { document.title = "Contracts · MRJAMESBRAND LTD"; });
 
 render();
+

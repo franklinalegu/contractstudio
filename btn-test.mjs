@@ -5,6 +5,7 @@ const html = readFileSync(new URL("./index.html", import.meta.url), "utf8");
 const has = (s) => { assert.ok(src.includes(s), "missing: " + s); };
 // core buttons still wired
 for (const a of [`data-act="new"`, `data-act="open"`, `data-act="edit"`, `data-act="clone"`, `data-act="share"`, `data-act="apply-code"`, `data-act="invoice"`, `data-act="save"`, `data-act="paid"`]) has(a);
+for (const a of [`data-act="preview-inv"`, `data-act="share-inv"`, `data-act="preview-inv-draft"`]) has(a);
 // new security buttons
 has(`data-act="backup-enc"`);
 has(`data-act="backup"`);

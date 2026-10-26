@@ -1,8 +1,23 @@
-import { readFileSync } from "fs";
+import { existsSync, readFileSync } from "fs";
 import assert from "assert";
 const src = readFileSync(new URL("./app.js", import.meta.url), "utf8");
 const readme = readFileSync(new URL("./README.md", import.meta.url), "utf8");
 const html = readFileSync(new URL("./index.html", import.meta.url), "utf8");
+const css = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
+// standalone invoice: 816×1056, no contract terms, preview/share actions
+for (const s of [".doc-invoice", "816px", "1056px", "TOTAL AMOUNT DUE", "preview-inv", "share-inv", "preview-inv-draft", "Payment Details"]) assert.ok(src.includes(s) || css.includes(s), "missing invoice redesign: " + s);
+assert.ok(!src.includes("per contract terms"), "invoice must not reference contract terms");
+// payment account: Kuda retired; each invoice asks which account to use
+for (const s of ["Payment account", "accountBank", "accountName", "accountNumber", "Each invoice can choose a different account"]) assert.ok(src.includes(s), "missing account choice: " + s);
+assert.ok(!/kuda/i.test(src), "Kuda account must be gone");
+// standalone invoice is local-only PII, not committed: check it when present
+const invPath = new URL("./invoice-INV-MJB-2026-7534.html", import.meta.url);
+if (existsSync(invPath)) {
+  const invFile = readFileSync(invPath, "utf8");
+  assert.ok(!/kuda/i.test(invFile), "Kuda account must be gone");
+  assert.ok(invFile.includes("Zenith Bank"), "standalone invoice must show the selected account");
+  assert.ok(invFile.includes("for One Year") && !/two years/i.test(invFile), "invoice services must be one year");
+}
 // return-code stamp: ref + issuedAt in payload, ref check + reuse warning on apply
 for (const s of ["appliedCodes", "CREF", "ISSUED", "ref:CREF", "issuedAt:ISSUED", "already applied"]) assert.ok(src.includes(s), "missing code-reuse: " + s);
 assert.ok(/p\.ref && p\.ref !== c\.ref/.test(src), "must reject cross-contract codes");

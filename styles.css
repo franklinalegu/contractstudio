@@ -33,6 +33,7 @@ a { color: inherit; }
 .shell { display: flex; min-height: 100vh; }
 .sidebar { width: 248px; background: var(--white); border-right: 1px solid var(--mist); padding: 20px 16px; position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column; gap: 4px; }
 .brand { font-family: var(--font-display); font-weight: 700; letter-spacing: 0.2em; font-size: 0.8rem; padding: 8px 12px 20px; }
+.monogram { display: block; width: 100%; height: auto; fill: currentColor; }
 .navlink { display: flex; gap: 10px; align-items: center; padding: 10px 12px; border-radius: 0; font-size: 0.9rem; font-weight: 500; color: #000000b3; background: none; border: 0; width: 100%; text-align: left; cursor: pointer; }
 .navlink:hover { background: var(--mist); color: var(--black); }
 .navlink.active { background: var(--black); color: var(--white); }
@@ -45,6 +46,7 @@ a { color: inherit; }
   table.list { table-layout: fixed; }
   table.list th, table.list td { padding: 10px 8px; font-size: 0.8rem; overflow-wrap: anywhere; }
   .mobilenav .mbrand { font-family: var(--font-display); font-weight: 700; font-size: 0.75rem; letter-spacing: 0.15em; padding: 10px 8px; flex-shrink: 0; }
+.mobilenav .mbrand .monogram { width: 44px; }
   .mobilenav .navlink { width: auto; white-space: nowrap; padding: 10px 12px; min-height: 44px; }
 }
 .main { flex: 1; padding: 32px; max-width: 1280px; }
@@ -143,9 +145,64 @@ table.list tr:hover td { background: #00000008; }
 /* invoice doc */
 .inv-head { display: flex; justify-content: space-between; margin-bottom: 32px; }
 .inv-brand { display: flex; gap: 12px; align-items: center; font-size: 0.85rem; }
-.inv-mark { font-family: var(--font-display); font-weight: 700; background: #000; color: #fff; padding: 10px 12px; letter-spacing: 0.1em; }
 .inv-logo { max-height: 64px; max-width: 200px; object-fit: contain; }
 .inv-total { background: var(--black); color: #fff; padding: 16px 24px; font-family: var(--font-display); font-size: 1.3rem; display: flex; justify-content: space-between; }
+
+/* invoice detail: one centered column matching the 816px document */
+.inv-view { width: 100%; max-width: 816px; margin: 0 auto; }
+
+/* ---- premium standalone invoice (816×1056) ---- */
+.doc-invoice { width: 816px; max-width: 100%; margin: 0 auto; overflow-x: auto; border: 0; background: #fff; break-inside: avoid; page-break-inside: avoid; }
+.doc-invoice .doc-page { width: 816px; min-height: 1056px; padding: 28px 52px; box-sizing: border-box; display: flex; flex-direction: column; border: 0; border-top: 6px solid #000; break-inside: avoid; page-break-inside: avoid; }
+.doc-invoice .inv-head { align-items: flex-start; margin-bottom: 4px; }
+.doc-invoice .inv-brand { gap: 14px; align-items: center; }
+.doc-invoice .inv-id strong { display: block; font-family: var(--font-display); font-weight: 700; font-size: 0.84rem; letter-spacing: 0.2em; color: #000; }
+.doc-invoice .inv-id small { display: block; margin-top: 3px; font-size: 0.58rem; font-weight: 500; letter-spacing: 0.16em; color: #000; }
+.doc-invoice .inv-email { display: block; margin-top: 4px; font-size: 0.74rem; color: #000; }
+.doc-invoice .inv-meta { text-align: right; }
+.doc-invoice .inv-meta h2 { font-family: var(--font-display); font-weight: 700; font-size: 2.1rem; letter-spacing: -0.02em; line-height: 1; color: #000; margin: 0 0 8px; }
+.doc-invoice .inv-meta p { display: flex; justify-content: flex-end; gap: 8px; margin: 0 0 3px; font-size: 0.72rem; color: #000; text-transform: none; letter-spacing: 0; }
+.doc-invoice .inv-meta p span { font-size: 0.6rem; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #000; }
+.doc-invoice .badge { margin-top: 7px; padding: 4px 9px; font-size: 0.6rem; letter-spacing: 0.14em; background: #fff; color: #000; border: 1px solid #000; }
+.doc-invoice .badge.b-paid { background: #000; color: #fff; }
+.doc-invoice .badge.b-part { background: #fff; color: #000; }
+.doc-invoice .badge.b-overdue { background: #000; color: #fff; }
+.doc-invoice h4 { font-family: var(--font-display); font-size: 0.62rem; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: #000; margin: 0 0 4px; }
+.doc-invoice p { color: #000; font-size: 0.88rem; line-height: 1.45; margin: 0; }
+.doc-invoice .inv-bill, .doc-invoice .inv-project { padding: 8px 0; border-top: 1px solid #000; }
+.doc-invoice .inv-bill p, .doc-invoice .inv-project p { color: #000; }
+.doc-invoice .inv-bill strong { color: #000; }
+.doc-invoice .doc-table { margin: 8px 0 0; font-size: 0.9rem; }
+.doc-invoice .doc-table th { background: #000; color: #fff; border: 0; padding: 7px 10px; font-family: var(--font-display); font-size: 0.6rem; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; }
+.doc-invoice .doc-table td { border: 0; border-bottom: 1px solid #000; background: transparent; padding: 7px 10px; vertical-align: top; color: #000; }
+.doc-invoice .doc-table td:nth-child(1), .doc-invoice .doc-table th:nth-child(1) { width: 40px; text-align: center; }
+.doc-invoice .doc-table td:nth-child(1) { color: #000; font-size: 0.74rem; }
+.doc-invoice .doc-table td:nth-child(3), .doc-invoice .doc-table th:nth-child(3) { width: 126px; text-align: right; }
+.doc-invoice .doc-table td:nth-child(3) { font-family: var(--font-display); font-weight: 700; font-size: 0.88rem; }
+.doc-invoice .doc-table td strong { display: block; font-family: var(--font-display); font-size: 0.9rem; font-weight: 700; color: #000; }
+.doc-invoice .line-desc { display: block; margin-top: 3px; font-size: 0.8rem; line-height: 1.4; color: #000; }
+.doc-invoice .inv-sums { width: 300px; margin-left: auto; padding: 4px 0 5px; }
+.doc-invoice .inv-sums p { display: flex; justify-content: space-between; gap: 24px; margin: 0; padding: 3px 0; font-size: 0.82rem; color: #000; }
+.doc-invoice .inv-sums p span:last-child { font-family: var(--font-display); font-weight: 700; color: #000; }
+.doc-invoice .inv-total { background: #000; color: #fff; padding: 12px 18px; margin: 0 0 10px; align-items: center; font-size: 1.35rem; }
+.doc-invoice .inv-total span:first-child { font-size: 0.62rem; letter-spacing: 0.2em; }
+.doc-invoice .inv-total span:last-child { font-size: 1.35rem; }
+.doc-invoice .doc-beige { background: #fff; padding: 14px 18px; margin: 0 0 10px; border: 1px solid #000; }
+.doc-invoice .doc-beige h4 { color: #000; margin: 0 0 6px; }
+.doc-invoice .pay-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 6px; }
+.doc-invoice .pay-grid strong { display: block; font-family: var(--font-display); font-size: 0.84rem; font-weight: 700; color: #000; margin-bottom: 2px; }
+.doc-invoice .pay-grid p { font-size: 0.8rem; line-height: 1.45; color: #000; }
+.doc-invoice .doc-beige > p { margin: 2px 0; font-size: 0.8rem; line-height: 1.45; color: #000; }
+.doc-invoice .doc-beige > p strong { color: #000; }
+.doc-invoice .doc-beige > p.pay-thanks { margin-top: 8px; font-family: var(--font-display); font-weight: 700; font-size: 0.82rem; color: #000; }
+.doc-invoice .doc-beige > p.pay-tag { font-style: italic; font-size: 0.72rem; color: #000; }
+.doc-invoice .doc-foot { margin-top: auto; padding-top: 6px; border-top: 1px solid #000; color: #000; font-size: 0.58rem; letter-spacing: 0.2em; justify-content: space-between; }
+.doc-invoice .mt { margin-top: 10px; }
+@media screen { .doc-invoice { box-shadow: 0 10px 40px rgba(0, 0, 0, 0.12); } }
+@media print {
+  .doc-invoice { width: 816px; max-width: none; overflow: visible; box-shadow: none; margin: 0; }
+  .doc-invoice .doc-page { width: 816px; min-height: 1056px; padding: 28px 52px; }
+}
 
 .empty { text-align: center; padding: 48px; color: var(--stone); }
 .alert { background: #fde7e7; border: 1px solid var(--error); color: var(--error); padding: 12px 16px; font-size: 0.85rem; margin-bottom: 16px; }
@@ -181,7 +238,7 @@ table.list tr:hover td { background: #00000008; }
   body { background: #fff; }
   .shell { display: block; }
   .main { max-width: none; padding: 0; }
-  .doc, .doc-olive, .doc-quote, .doc-beige, .doc-table th, .doc-info .bar, .inv-total, .inv-mark { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .doc, .doc-olive, .doc-quote, .doc-beige, .doc-table th, .doc-info .bar, .inv-total { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .doc { border: 0; }
   .doc-page { border: 0; break-after: auto; padding: 36px 40px; }
   .doc-top { margin-bottom: 40px; }
@@ -193,3 +250,6 @@ table.list tr:hover td { background: #00000008; }
   .doc .sig-meta dt:has(+ dd:empty) { display: none; }
   .doc tr:has(> td:last-child:empty) { display: none; }
 }
+
+@page { size: 8.5in 11in; margin: 0; }
+
